@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { onSnapshot, doc, updateDoc } from "firebase/firestore";
+import { onSnapshot, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Check } from "lucide-react";
 import { db, auth } from "@/firebase/firebase.client.js";
 import PageLoader from "@/app/components/PageLoader";
@@ -176,13 +176,8 @@ const Billing = () => {
                 const expiresAt = userData.expiresAt.toDate();
                 const now = new Date();
 
-                // Calculate time difference in milliseconds
                 const timeDiff = expiresAt.getTime() - now.getTime();
-
-                // Convert milliseconds to days and floor the value
                 const daysLeft = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-
-                // Ensure daysLeft is not negative
                 setDaysRemaining(daysLeft > 0 ? daysLeft : 0);
               } else {
                 setCurrentPlan(null);
@@ -222,16 +217,27 @@ const Billing = () => {
 
     try {
       const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
       const trialExpiryDate = new Date();
       trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
 
-      await updateDoc(userDocRef, {
+      const trialData = {
         plan: "standard",
         subscriptionStatus: "active",
         expiresAt: trialExpiryDate,
         isTrial: true,
         trialUsed: true,
-      });
+      };
+
+      if (userDocSnap.exists()) {
+        await updateDoc(userDocRef, trialData);
+      } else {
+        await setDoc(userDocRef, {
+          ...trialData,
+          createdAt: new Date(),
+        });
+      }
 
       window.location.href = "/dashboard";
     } catch (err) {
