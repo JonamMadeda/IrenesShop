@@ -173,7 +173,8 @@ const RecentTransactions = ({ transactions }) => {
           >
             Previous
           </button>
-          <div className="flex space-x-2">
+          {/* Hide page numbers on mobile, show on sm and larger screens */}
+          <div className="hidden sm:flex space-x-2">
             {[...Array(totalPages).keys()].map((page) => (
               <button
                 key={page + 1}
@@ -187,6 +188,10 @@ const RecentTransactions = ({ transactions }) => {
                 {page + 1}
               </button>
             ))}
+          </div>
+          {/* Show a simple page counter on mobile */}
+          <div className="sm:hidden text-center text-sm font-medium text-gray-700">
+            Page {currentPage} of {totalPages}
           </div>
           <button
             onClick={() => handlePageChange(currentPage + 1)}

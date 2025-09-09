@@ -244,18 +244,11 @@ const SalesPage = () => {
     );
   }
 
-  const pageNumbers = [];
-  if (sales.length > itemsPerPage) {
-    for (let i = 1; i <= totalPages; i++) {
-      pageNumbers.push(i);
-    }
-  }
-
   return (
     <div className="min-h-[90svh] w-full flex justify-center bg-gray-100 font-sans p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-7xl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4 sm:mb-0">
+        <div className="flex flex-col sm:flex-row justify-between items-center sm:items-center mb-6">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-4 sm:mb-0">
             Sales Records 📈
           </h1>
           <button
@@ -270,7 +263,7 @@ const SalesPage = () => {
         </div>
 
         {/* Period Selector & Date Navigation */}
-        <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between relative z-40">
+        <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 mb-8 flex flex-col sm:flex-row items-center sm:items-center justify-between relative z-40">
           <div className="flex items-center space-x-4">
             <label
               htmlFor="date-input"
@@ -291,7 +284,7 @@ const SalesPage = () => {
               <button
                 key={p}
                 onClick={() => handlePeriodChange(p)}
-                className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${
+                className={`px-2 py-2 text-sm font-medium rounded-xl transition-colors ${
                   period === p
                     ? "bg-blue-600 text-white shadow-md"
                     : "text-gray-600 bg-gray-50 hover:bg-gray-100"
@@ -319,7 +312,7 @@ const SalesPage = () => {
         />
 
         {sales.length > itemsPerPage && (
-          <nav className="mt-4 flex justify-center items-center space-x-2">
+          <nav className="mt-4 flex justify-center items-center space-x-4">
             <button
               onClick={goToPreviousPage}
               disabled={currentPage === 1}
@@ -327,22 +320,9 @@ const SalesPage = () => {
             >
               Previous
             </button>
-            <ul className="flex space-x-2">
-              {pageNumbers.map((number) => (
-                <li key={number}>
-                  <button
-                    onClick={() => paginate(number)}
-                    className={`px-4 py-2 rounded-xl transition-colors ${
-                      number === currentPage
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    {number}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="text-center text-sm font-medium text-gray-700">
+              Page {currentPage} of {totalPages}
+            </div>
             <button
               onClick={goToNextPage}
               disabled={currentPage === totalPages}

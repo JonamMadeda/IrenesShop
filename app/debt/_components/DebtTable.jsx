@@ -41,13 +41,13 @@ const DebtTable = ({
 
   return (
     <>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+      <div className="flex flex-col sm:flex-row justify-between items-center space-y-2 mb-8">
+        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">
           Debt Records
         </h1>
         <button
           onClick={() => openPopup()}
-          className="px-6 py-2 rounded-xl font-bold text-sm text-white transition-all duration-300 transform bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 active:scale-95"
+          className="px-6 py-3 rounded-xl font-bold text-sm text-white transition-all duration-300 transform bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 active:scale-95"
         >
           Record New Debt
         </button>
@@ -60,7 +60,7 @@ const DebtTable = ({
         totalItems={totalItems}
       />
 
-      <div className="flex justify-center sm:justify-start mb-6 space-x-4">
+      <div className="flex flex-col gap-2 sm:gap-0 sm:flex-row justify-center sm:justify-start mb-6 sm:space-x-4">
         <button
           onClick={() => setShowOverdueOnly(false)}
           className={`px-4 py-2 rounded-xl font-semibold text-sm transition-colors duration-300 ${

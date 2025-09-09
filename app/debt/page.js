@@ -333,19 +333,27 @@ const DebtTracker = () => {
               Previous
             </button>
 
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => handlePageChange(i + 1)}
-                className={`w-10 h-10 rounded-full font-semibold transition-colors ${
-                  currentPage === i + 1
-                    ? "bg-blue-600 text-white shadow-lg"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {/* Hides page buttons on mobile, shows on sm and larger */}
+            <div className="hidden sm:flex space-x-2">
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i + 1}
+                  onClick={() => handlePageChange(i + 1)}
+                  className={`w-10 h-10 rounded-full font-semibold transition-colors ${
+                    currentPage === i + 1
+                      ? "bg-blue-600 text-white shadow-lg"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+
+            {/* Shows a simple page counter on mobile */}
+            <div className="sm:hidden text-center text-sm font-medium text-gray-700">
+              Page {currentPage} of {totalPages}
+            </div>
 
             <button
               onClick={handleNextPage}

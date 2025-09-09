@@ -37,8 +37,8 @@ export default function Navbar({ isExpired = false }) {
     <nav className="bg-white border-b border-gray-300 p-4 shadow-md font-sans">
       <div className="container mx-auto flex justify-between items-center">
         {/* The brand or logo section, now a clickable link to the dashboard. */}
-        <a href="/dashboard" className="text-2xl font-semibold">
-          Jonams Inventory
+        <a href="/dashboard" className="text-xl font-bold">
+          Jonam
         </a>
 
         {/* The main navigation links, visible on medium screens and up.
@@ -120,12 +120,12 @@ export default function Navbar({ isExpired = false }) {
             </svg>
           </button>
 
-          <div className="w-full space-y-8">
+          <div className="w-full space-y-3 flex flex-col justify-center items-center ">
             {navLinks.map((link) => (
               <a
                 key={link.name}
                 href={link.href}
-                className="block w-full text-left text-3xl font-bold text-gray-800 hover:text-blue-600 transition-colors"
+                className="w-full text-left border-b border-gray-700 text-2xl font-semibold text-gray-800 hover:text-blue-600 transition-colors"
                 onClick={toggleMenu} // Close menu on link click
               >
                 {link.name}

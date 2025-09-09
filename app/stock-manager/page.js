@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  PlusCircle,
   ShoppingBag,
   ArrowRight,
   UserCheck,
@@ -12,13 +11,9 @@ import {
   AlertCircle,
   Loader,
   List,
-  ChevronLeft,
-  ChevronRight,
-  Search,
 } from "lucide-react";
 import {
   collection,
-  addDoc,
   updateDoc,
   doc,
   serverTimestamp,
@@ -36,12 +31,12 @@ import {
   signOut,
 } from "firebase/auth";
 import { auth, db } from "@/firebase/firebase.client";
-import StocksTable from "./_components/StocksTable";
 import ManageCategories from "./_components/ManageCategories";
 import AddItem from "./_components/AddItem";
 import PageLoader from "@/app/components/PageLoader";
+import StocksTable from "./_components/StocksTable"; // ✅ Imported from separate file
 
-// Custom Alert Modal Component
+// ---------- Alert Modal ----------
 const AlertModal = ({ show, title, message, onClose }) => {
   if (!show) return null;
   return (
@@ -65,7 +60,7 @@ const AlertModal = ({ show, title, message, onClose }) => {
   );
 };
 
-// Confirmation Modal Component
+// ---------- Confirm Modal ----------
 const ConfirmModal = ({ show, title, message, onConfirm, onCancel }) => {
   if (!show) return null;
   return (
@@ -97,7 +92,7 @@ const ConfirmModal = ({ show, title, message, onConfirm, onCancel }) => {
   );
 };
 
-// Modal Component
+// ---------- Modal Wrapper ----------
 const Modal = ({ show, title, onClose, children }) => {
   if (!show) return null;
   return (
@@ -120,7 +115,7 @@ const Modal = ({ show, title, onClose, children }) => {
   );
 };
 
-// Main App component
+// ---------- Main App ----------
 const App = () => {
   const [modalState, setModalState] = useState({
     show: false,
@@ -146,82 +141,59 @@ const App = () => {
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [categories, setCategories] = useState([]);
 
-  // Auth and Subscription listener
+  // ---------- Auth + Subscription ----------
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       if (!currentUser) {
-        console.log("No authenticated user found. Showing auth UI.");
         setUser(null);
         setIsLoading(false);
         return;
       }
 
       const userDocRef = doc(db, "users", currentUser.uid);
-      const unsubscribeUser = onSnapshot(
-        userDocRef,
-        (docSnap) => {
-          const userData = docSnap.data();
-          if (
-            docSnap.exists() &&
-            userData?.subscriptionStatus === "active" &&
-            userData?.expiresAt.toDate() > new Date()
-          ) {
-            setUser(currentUser);
-            setUserDisplayName(currentUser.displayName || currentUser.email);
+      const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+        const userData = docSnap.data();
+        if (
+          docSnap.exists() &&
+          userData?.subscriptionStatus === "active" &&
+          userData?.expiresAt.toDate() > new Date()
+        ) {
+          setUser(currentUser);
+          setUserDisplayName(currentUser.displayName || currentUser.email);
 
-            // Fetch categories only after confirming active subscription
-            const categoriesCollectionRef = collection(
-              db,
-              "users",
-              currentUser.uid,
-              "categories"
-            );
-            const q = query(categoriesCollectionRef, orderBy("name"));
-
-            const unsubscribeCategories = onSnapshot(
-              q,
-              (snapshot) => {
-                const categoriesData = snapshot.docs.map((doc) => ({
-                  id: doc.id,
-                  ...doc.data(),
-                }));
-                setCategories(categoriesData);
-                setIsLoading(false);
-              },
-              (error) => {
-                console.error("Error fetching categories: ", error);
-                showAlert("Failed to load categories.", "Error!");
-                setIsLoading(false);
-              }
-            );
-
-            return () => unsubscribeCategories();
-          } else {
-            console.log(
-              "Subscription is inactive or expired. Redirecting to root."
-            );
-            window.location.href = "/";
-          }
-        },
-        (error) => {
-          console.error("Error fetching user data:", error);
+          // fetch categories
+          const categoriesCollectionRef = collection(
+            db,
+            "users",
+            currentUser.uid,
+            "categories"
+          );
+          const q = query(categoriesCollectionRef, orderBy("name"));
+          const unsubscribeCategories = onSnapshot(q, (snapshot) => {
+            const categoriesData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            setCategories(categoriesData);
+            setIsLoading(false);
+          });
+          return () => unsubscribeCategories();
+        } else {
           window.location.href = "/";
         }
-      );
-
+      });
       return () => unsubscribeUser();
     });
-
     return () => unsubscribeAuth();
   }, []);
 
+  // ---------- Auth Handlers ----------
   const handleSignUp = async () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       showAlert("User signed up!", "Success!");
-    } catch (err) {
-      console.error(err);
-      showAlert("Error signing up. Please try again.", "Error!");
+    } catch {
+      showAlert("Error signing up. Try again.", "Error!");
     }
   };
 
@@ -229,9 +201,8 @@ const App = () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       showAlert("Logged in!", "Success!");
-    } catch (err) {
-      console.error(err);
-      showAlert("Error logging in. Please check your credentials.", "Error!");
+    } catch {
+      showAlert("Error logging in.", "Error!");
     }
   };
 
@@ -240,18 +211,15 @@ const App = () => {
     showAlert("Logged out successfully.", "Logout");
   };
 
+  // ---------- Modal + Alerts ----------
   const openModal = (title, content) =>
     setModalState({ show: true, title, content });
-
   const closeModal = () =>
     setModalState({ show: false, title: "", content: null });
-
   const showAlert = (message, title) =>
     setAlertState({ show: true, title, message });
-
   const closeAlert = () =>
     setAlertState({ show: false, title: "", message: "" });
-
   const closeConfirmModal = () =>
     setConfirmModalState({
       show: false,
@@ -260,7 +228,7 @@ const App = () => {
       onConfirm: () => {},
     });
 
-  // Handlers for Firestore operations
+  // ---------- Category & Item Handlers ----------
   const handleManageCategories = () => {
     openModal(
       "Manage Categories",
@@ -273,7 +241,7 @@ const App = () => {
     );
   };
 
-  const handleAddNewItem = async () => {
+  const handleAddNewItem = () => {
     openModal(
       "Add New Item",
       <AddItem
@@ -287,10 +255,6 @@ const App = () => {
   };
 
   const handleUpdateItem = async (id, data) => {
-    if (!user) {
-      console.error("User not authenticated.");
-      return;
-    }
     try {
       const itemRef = doc(db, "users", user.uid, "items", id);
       await updateDoc(itemRef, {
@@ -301,8 +265,7 @@ const App = () => {
         sellingPrice: Number(data.sellingPrice),
       });
       showAlert("Item updated successfully!", "Success!");
-    } catch (error) {
-      console.error("Error updating document: ", error);
+    } catch {
       showAlert("Error updating item.", "Error!");
     }
   };
@@ -311,129 +274,86 @@ const App = () => {
     setConfirmModalState({
       show: true,
       title: "Confirm Deletion",
-      message: `Are you sure you want to delete the category "${categoryName}"? This will not delete items associated with this category.`,
+      message: `Delete category "${categoryName}"? Items won't be deleted.`,
       onConfirm: async () => {
-        try {
-          if (user) {
-            await deleteDoc(
-              doc(db, "users", user.uid, "categories", categoryId)
-            );
-            showAlert(
-              `Category "${categoryName}" deleted successfully.`,
-              "Success!"
-            );
-          }
-        } catch (error) {
-          console.error("Error deleting category: ", error);
-          showAlert(`Failed to delete "${categoryName}".`, "Error!");
-        } finally {
-          closeConfirmModal();
-        }
+        await deleteDoc(doc(db, "users", user.uid, "categories", categoryId));
+        showAlert(`Category "${categoryName}" deleted.`, "Success!");
+        closeConfirmModal();
       },
     });
   };
 
-  // Delete a single item
   const handleDeleteItem = (itemId, itemName) => {
     setConfirmModalState({
       show: true,
       title: "Confirm Deletion",
-      message: `Are you sure you want to delete "${itemName}"? This action cannot be undone.`,
+      message: `Delete "${itemName}" permanently?`,
       onConfirm: async () => {
-        try {
-          if (user) {
-            await deleteDoc(doc(db, "users", user.uid, "items", itemId));
-            showAlert(`Item "${itemName}" deleted successfully.`, "Success!");
-          }
-        } catch (error) {
-          console.error("Error deleting item: ", error);
-          showAlert(`Failed to delete "${itemName}".`, "Error!");
-        } finally {
-          closeConfirmModal();
-        }
+        await deleteDoc(doc(db, "users", user.uid, "items", itemId));
+        showAlert(`Item "${itemName}" deleted.`, "Success!");
+        closeConfirmModal();
       },
     });
   };
 
-  // Delete all items
   const handleDeleteAllItems = () => {
     setConfirmModalState({
       show: true,
       title: "Confirm All Deletion",
-      message:
-        "Are you absolutely sure you want to delete ALL items? This action is permanent and cannot be undone.",
+      message: "Delete ALL items? This cannot be undone.",
       onConfirm: async () => {
         setIsDeletingAll(true);
-        try {
-          if (user) {
-            const itemsRef = collection(db, "users", user.uid, "items");
-            const snapshot = await getDocs(itemsRef);
-            if (snapshot.empty) {
-              showAlert("No items to delete.", "Info");
-              return;
-            }
-
-            const batch = writeBatch(db);
-            snapshot.docs.forEach((doc) => {
-              batch.delete(doc.ref);
-            });
-            await batch.commit();
-            showAlert("All items deleted successfully.", "Success!");
-          }
-        } catch (error) {
-          console.error("Error deleting all items: ", error);
-          showAlert("Failed to delete all items.", "Error!");
-        } finally {
-          closeConfirmModal();
-          setIsDeletingAll(false);
-        }
+        const itemsRef = collection(db, "users", user.uid, "items");
+        const snapshot = await getDocs(itemsRef);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        showAlert("All items deleted.", "Success!");
+        setIsDeletingAll(false);
+        closeConfirmModal();
       },
     });
   };
 
-  // Use the new PageLoader component here
-  if (isLoading) {
-    return <PageLoader />;
-  }
+  // ---------- Loading ----------
+  if (isLoading) return <PageLoader />;
 
-  // Auth UI
+  // ---------- Auth UI ----------
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-8 sm:p-10 rounded-xl w-full max-w-sm transform transition-all duration-500 shadow-2xl space-y-6">
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-blue-700 text-center font-sans">
+        <div className="bg-white p-8 rounded-xl w-full max-w-sm shadow-2xl space-y-6">
+          <h1 className="text-3xl font-bold text-blue-700 text-center">
             Welcome
           </h1>
-          <p className="text-center text-gray-600 font-sans">
-            Sign up or log in to manage your inventory.
+          <p className="text-center text-gray-600">
+            Sign up or log in to manage inventory.
           </p>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-700 transition-all font-sans"
+            className="w-full px-4 py-3 border rounded-xl"
           />
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-700 transition-all font-sans"
+            className="w-full px-4 py-3 border rounded-xl"
           />
           <div className="flex flex-col space-y-4">
             <button
               onClick={handleLogin}
-              className="bg-green-600 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center font-sans"
+              className="bg-green-600 text-white py-3 rounded-xl"
             >
-              <ArrowRight className="mr-2" />
               Login
             </button>
             <button
               onClick={handleSignUp}
-              className="bg-blue-700 text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors flex items-center justify-center font-sans"
+              className="bg-blue-700 text-white py-3 rounded-xl"
             >
-              <UserCheck className="mr-2" />
               Sign Up
             </button>
           </div>
@@ -448,55 +368,55 @@ const App = () => {
     );
   }
 
+  // ---------- Main Dashboard ----------
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-start p-4 font-sans">
-      <div className="bg-white p-6 sm:p-8 rounded-xl w-full max-w-7xl transform transition-all duration-500 shadow-2xl">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-4 font-sans">
+      <div className="bg-white p-6 rounded-xl w-full max-w-7xl shadow-2xl">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-blue-700 font-sans">
+          <h1 className="text-2xl font-bold text-blue-700">
             Inventory Manager
           </h1>
-          <div className="flex items-center space-x-2">
-            <p className="text-sm text-gray-500 font-sans hidden sm:block">
-              Welcome, {userDisplayName}
-            </p>
-          </div>
+          <p className="hidden sm:block text-gray-500">
+            Welcome, {userDisplayName}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <button
             onClick={handleAddNewItem}
-            className="bg-blue-700 text-white px-4 py-3 rounded-xl hover:bg-blue-800 transition-colors duration-300 flex items-center justify-center font-sans shadow-lg transform hover:scale-105 w-full"
+            className="bg-blue-700 text-white py-3 rounded-xl flex justify-center items-center"
           >
-            <ShoppingBag className="mr-2" />
-            Add Item
+            <ShoppingBag className="mr-2" /> Add Item
           </button>
           <button
             onClick={handleManageCategories}
-            className="text-blue-700 bg-white border-2 border-blue-700 px-4 py-3 rounded-xl hover:bg-blue-50 transition-colors duration-300 flex items-center justify-center font-sans shadow-lg transform hover:scale-105 w-full"
+            className="border-2 border-blue-700 text-blue-700 py-3 rounded-xl flex justify-center items-center"
           >
-            <List className="mr-2" />
-            Manage Categories
+            <List className="mr-2" /> Manage Categories
           </button>
           <button
             onClick={handleDeleteAllItems}
             disabled={isDeletingAll}
-            className="bg-red-600 text-white px-4 py-3 rounded-xl hover:bg-red-700 transition-colors duration-300 flex items-center justify-center font-sans shadow-lg transform hover:scale-105 w-full disabled:bg-red-300"
+            className="bg-red-600 text-white py-3 rounded-xl flex justify-center items-center"
           >
             {isDeletingAll ? (
               <Loader className="mr-2 animate-spin" />
             ) : (
               <Trash2 className="mr-2" />
-            )}
+            )}{" "}
             Delete All Items
           </button>
         </div>
 
+        {/* ✅ Stocks Table as external component */}
         <StocksTable
           user={user}
           onUpdate={handleUpdateItem}
           onDelete={handleDeleteItem}
+          categories={categories}
         />
 
+        {/* Modals */}
         <Modal
           show={modalState.show}
           title={modalState.title}
@@ -504,14 +424,12 @@ const App = () => {
         >
           {modalState.content}
         </Modal>
-
         <AlertModal
           show={alertState.show}
           title={alertState.title}
           message={alertState.message}
           onClose={closeAlert}
         />
-
         <ConfirmModal
           show={confirmModalState.show}
           title={confirmModalState.title}

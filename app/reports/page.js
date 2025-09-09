@@ -400,14 +400,12 @@ export default function Reports() {
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 font-sans">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between">
+        <div className="mb-8 flex flex-col sm:flex-row items-center sm:items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">
+            <h1 className="text-3xl sm:text-3xl font-semibold text-gray-900 mb-1">
               Sales Reports 📈
             </h1>
-            <p className="text-base text-gray-600">
-              A detailed look at your sales performance and trends.
-            </p>
+          
           </div>
           <div className="mt-4 sm:mt-0 flex items-center gap-2">
             <button
@@ -415,7 +413,7 @@ export default function Reports() {
               className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 text-sm rounded-xl hover:bg-blue-700 transition-colors font-medium"
             >
               <Download className="h-4 w-4" />
-              <span>Export Report</span>
+              <span>Download Report</span>
             </button>
           </div>
         </div>
@@ -454,7 +452,7 @@ export default function Reports() {
               <button
                 key={p}
                 onClick={() => handlePeriodChange(p)}
-                className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${
+                className={`px-2 py-2 text-sm font-medium rounded-xl transition-colors ${
                   period === p
                     ? "bg-blue-600 text-white shadow-md"
                     : "text-gray-600 bg-gray-50 hover:bg-gray-100"

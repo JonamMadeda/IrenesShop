@@ -253,7 +253,7 @@ export default function Dashboard() {
         transition={{ duration: 0.8, ease: "easeOut" }}
         className="w-full max-w-7xl"
       >
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-gray-900 mb-12 md:p-7 sm:p-4 text-center">
+        <h1 className="text-2xl sm:text-4xl md:text-5xl font-serif font-semibold text-gray-800 mb-8 md:p-7 sm:p-4 text-center">
           Hello, {firstName} {lastName}
         </h1>
 

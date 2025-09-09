@@ -9,7 +9,7 @@ const DebtSummary = ({
   totalItems,
 }) => {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
       <div className="bg-gray-800 text-white rounded-xl shadow-md p-6">
         <p className="text-sm font-semibold opacity-80">Total Debt Amount</p>
         <h2 className="text-3xl font-extrabold mt-1">
