@@ -7,18 +7,12 @@ import { Loader2 } from "lucide-react";
 
 import { auth, db } from "@/firebase/firebase.client";
 
-/**
- * Handles user authentication and subscription status checks.
- * Redirects the user based on their authentication and plan status.
- */
 export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [modalContent, setModalContent] = useState(null);
 
   useEffect(() => {
-    // Listen for changes in the user's authentication state.
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      // If no user is authenticated, redirect to the login page.
       if (!user) {
         window.location.href = "/auth";
         return;
@@ -28,18 +22,24 @@ export default function HomePage() {
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
 
-        // If the user document doesn't exist, redirect to the login page.
+        // If no user doc exists → treat as new user
         if (!userDocSnap.exists()) {
-          window.location.href = "/auth";
+          setModalContent({
+            title: "Welcome!",
+            message:
+              "You don’t have an active subscription yet. Please go to billing to start your 14-day free trial.",
+            buttonText: "Go to Billing",
+            buttonAction: () => (window.location.href = "/billing"),
+            isExpired: false,
+          });
           return;
         }
 
         const userData = userDocSnap.data();
         const expiresAt = userData.expiresAt?.toDate();
 
-        // Case 1: Subscription has expired.
+        // Case 1: Expired
         if (expiresAt && expiresAt < new Date()) {
-          // Update subscription status in Firestore to inactive.
           await updateDoc(userDocRef, { subscriptionStatus: "inactive" });
           setModalContent({
             title: "Subscription Expired",
@@ -50,18 +50,16 @@ export default function HomePage() {
             isExpired: true,
           });
         }
-        // Case 2: Subscription is active.
+        // Case 2: Active subscription
         else if (userData.subscriptionStatus === "active") {
-          // Redirect to the main dashboard.
           window.location.href = "/dashboard";
         }
-        // Case 3: New user or inactive plan.
+        // Case 3: No subscription info or inactive plan
         else {
-          // Show a modal for new users to start a trial.
           setModalContent({
             title: "Welcome!",
             message:
-              "You don't have an active plan yet. Head to the billing page to start your 14-day free trial.",
+              "You don’t have an active subscription yet. Please go to billing to start your 14-day free trial.",
             buttonText: "Go to Billing",
             buttonAction: () => (window.location.href = "/billing"),
             isExpired: false,
@@ -75,11 +73,9 @@ export default function HomePage() {
       }
     });
 
-    // Cleanup the listener on component unmount.
     return () => unsubscribe();
   }, []);
 
-  // Show a loading spinner while authentication is being checked.
   if (loading) {
     return (
       <main className="h-screen flex items-center justify-center bg-gray-50">
@@ -93,7 +89,6 @@ export default function HomePage() {
     );
   }
 
-  // Show a modal based on the subscription status.
   if (modalContent) {
     return (
       <main className="h-screen flex items-center justify-center bg-gray-50">
@@ -121,6 +116,5 @@ export default function HomePage() {
     );
   }
 
-  // This should not be reached in a typical flow, as a redirect or modal is expected.
   return null;
 }
