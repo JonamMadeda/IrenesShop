@@ -18,6 +18,7 @@ import {
   orderBy,
   onSnapshot,
 } from "firebase/firestore";
+import ConfirmModal from "./ConfirmModal";
 
 // Create Category Form
 const CreateCategoryForm = ({ onCategoryAdded, showAlert, db, userId }) => {
@@ -118,6 +119,11 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const categoriesPerPage = 3;
 
+  // State for confirmation pop-up
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [confirmMessage, setConfirmMessage] = useState("");
+
   useEffect(() => {
     if (!userId) {
       return;
@@ -174,6 +180,37 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
     // but is kept for clarity.
   };
 
+  // Function to open the confirmation pop-up
+  const handleDeleteClick = (categoryId, categoryName) => {
+    setCategoryToDelete(categoryId);
+    setConfirmMessage(
+      `Are you sure you want to delete the category "${categoryName}"?`
+    );
+    setIsConfirmOpen(true);
+  };
+
+  // Function to handle the actual deletion
+  const handleConfirmDelete = async () => {
+    if (!categoryToDelete || !userId) return;
+    try {
+      await deleteDoc(doc(db, "users", userId, "categories", categoryToDelete));
+      showAlert("Category deleted successfully!", "Success!");
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      showAlert("Failed to delete category.", "Error!");
+    } finally {
+      setIsConfirmOpen(false);
+      setCategoryToDelete(null);
+      setConfirmMessage("");
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setIsConfirmOpen(false);
+    setCategoryToDelete(null);
+    setConfirmMessage("");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b pb-4">
@@ -205,7 +242,7 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
         </div>
         <CategoryList
           categories={currentCategories}
-          onDelete={onDeleteCategory}
+          onDelete={handleDeleteClick}
         />
         {totalPages > 1 && (
           <div className="flex justify-center items-center space-x-4 mt-4">
@@ -229,6 +266,14 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
           </div>
         )}
       </div>
+
+      {isConfirmOpen && (
+        <ConfirmModal
+          message={confirmMessage}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
     </div>
   );
 };
