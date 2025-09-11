@@ -231,37 +231,71 @@ const DebtTracker = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    setShowConfirmModal(false);
-    setIsLoading(true);
-    try {
-      const docRef = doc(db, `users/${userId}/debts`, id);
-      await deleteDoc(docRef);
-      showStatus("success", "Debt record deleted successfully!");
-    } catch (error) {
-      console.error("Error deleting debt record:", error);
-      showStatus("error", "Failed to delete debt record.");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleDelete = (id) => {
+    setConfirmMessage(
+      "Are you sure you want to delete this debt record? This action cannot be undone."
+    );
+    setConfirmAction(() => async () => {
+      setShowConfirmModal(false);
+      setIsLoading(true);
+      try {
+        const docRef = doc(db, `users/${userId}/debts`, id);
+        await deleteDoc(docRef);
+        showStatus("success", "Debt record deleted successfully!");
+      } catch (error) {
+        console.error("Error deleting debt record:", error);
+        showStatus("error", "Failed to delete debt record.");
+      } finally {
+        setIsLoading(false);
+      }
+    });
+    setShowConfirmModal(true);
   };
 
-  const handlePaidToggle = async (debt) => {
-    setShowConfirmModal(false);
-    setIsLoading(true);
-    try {
-      const docRef = doc(db, `users/${userId}/debts`, debt.id);
-      await updateDoc(docRef, { isPaid: !debt.isPaid });
-      showStatus(
-        `success`,
-        `Debt marked as ${debt.isPaid ? "unpaid" : "paid"}.`
+  const handlePaidToggle = (debt) => {
+    if (debt.isPaid) {
+      setConfirmMessage("Are you sure you want to mark this debt as unpaid?");
+      setConfirmAction(() => async () => {
+        setShowConfirmModal(false);
+        setIsLoading(true);
+        try {
+          const docRef = doc(db, `users/${userId}/debts`, debt.id);
+          await updateDoc(docRef, { isPaid: false });
+          showStatus("success", "Debt marked as unpaid.");
+        } catch (error) {
+          console.error("Error updating paid status:", error);
+          showStatus("error", "Failed to update debt status.");
+        } finally {
+          setIsLoading(false);
+        }
+      });
+    } else {
+      setConfirmMessage(
+        "Are you sure you want to mark this debt as paid? This will delete the debt record and add it to sales."
       );
-    } catch (error) {
-      console.error("Error updating paid status:", error);
-      showStatus("error", "Failed to update debt status.");
-    } finally {
-      setIsLoading(false);
+      setConfirmAction(() => async () => {
+        setShowConfirmModal(false);
+        setIsLoading(true);
+        try {
+          // Move debt to sales collection
+          const salesCollectionRef = collection(db, `users/${userId}/sales`);
+          const salesRecord = { ...debt, paidAt: serverTimestamp() };
+          await addDoc(salesCollectionRef, salesRecord);
+
+          // Delete the original debt record
+          const debtDocRef = doc(db, `users/${userId}/debts`, debt.id);
+          await deleteDoc(debtDocRef);
+
+          showStatus("success", "Debt paid and moved to sales successfully!");
+        } catch (error) {
+          console.error("Error marking debt as paid:", error);
+          showStatus("error", "Failed to mark debt as paid.");
+        } finally {
+          setIsLoading(false);
+        }
+      });
     }
+    setShowConfirmModal(true);
   };
 
   const overdueDebts = debts.filter(

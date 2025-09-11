@@ -1,6 +1,6 @@
 import React from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2 } from "lucide-react";
+// Removed unused imports: Pencil, Trash2
 
 // Helper function to safely extract a numeric value
 const getNumericValue = (value) => {
@@ -10,6 +10,11 @@ const getNumericValue = (value) => {
 
 const SalesTable = ({ sales, loading, error, onEdit, onDeleteClick }) => {
   if (loading) {
+    // Assuming PageLoader is handled by the parent component,
+    // but if this component directly handles its own loading state for the table,
+    // you would render PageLoader here.
+    // For now, I'll keep a simple loading text as per original,
+    // but a parent component would typically pass 'loading' to PageLoader.
     return <div className="text-center py-8">Loading sales data...</div>;
   }
   if (error) {
@@ -84,16 +89,16 @@ const SalesTable = ({ sales, loading, error, onEdit, onDeleteClick }) => {
                     <button
                       onClick={() => onEdit(sale)}
                       className="text-blue-600 hover:text-blue-900"
-                      aria-label="Edit"
+                      aria-label="Edit Sale"
                     >
-                      <Pencil size={18} />
+                      Edit
                     </button>
                     <button
                       onClick={() => onDeleteClick(sale.id)}
                       className="text-red-600 hover:text-red-900"
-                      aria-label="Delete"
+                      aria-label="Delete Sale"
                     >
-                      <Trash2 size={18} />
+                      Delete
                     </button>
                   </div>
                 </td>

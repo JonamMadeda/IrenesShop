@@ -22,7 +22,13 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { signInWithCustomToken, signInAnonymously } from "firebase/auth";
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  CheckCircle,
+} from "lucide-react";
 import RecordSaleModal from "./_components/RecordSaleModal";
 import ConfirmModal from "./_components/ConfirmModal";
 import SalesTable from "./_components/SalesTable";
@@ -70,6 +76,9 @@ const SalesPage = () => {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [period, setPeriod] = useState("monthly"); // Default period
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  // New state for success message
+  const [successMessage, setSuccessMessage] = useState(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -213,6 +222,10 @@ const SalesPage = () => {
   const handleDelete = async (saleId) => {
     try {
       await deleteDoc(doc(db, salesCollectionPath, saleId));
+      setSuccessMessage("Sale record deleted successfully!");
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000); // Hide after 3 seconds
     } catch (err) {
       console.error("Error deleting sale:", err);
       // We can't show alert, so we'll just log it
@@ -350,6 +363,16 @@ const SalesPage = () => {
             onConfirm={confirmAction}
             onCancel={handleCloseConfirmModal}
           />
+        )}
+
+        {/* Success Notification */}
+        {successMessage && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <div className="flex items-center gap-2 p-4 bg-green-500 text-white rounded-xl shadow-lg">
+              <CheckCircle size={20} />
+              <span className="font-medium">{successMessage}</span>
+            </div>
+          </div>
         )}
       </div>
     </div>
