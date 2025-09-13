@@ -10,6 +10,7 @@ import PageLoader from "@/app/components/PageLoader";
 const PricingCard = ({
   planName,
   price,
+  originalPrice,
   features,
   currentPlan,
   canStartTrial,
@@ -57,7 +58,7 @@ const PricingCard = ({
     if (canStartTrial && isStandardPlan) {
       handleFreeTrial();
     } else {
-      handleSubscribe(planName);
+      handleSubscribe(planName, price);
     }
   };
 
@@ -84,6 +85,11 @@ const PricingCard = ({
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
           {planName.charAt(0).toUpperCase() + planName.slice(1)} Plan
         </h2>
+        {isStandardPlan && originalPrice && (
+          <p className="text-xl font-medium text-gray-400 line-through">
+            KES {originalPrice}
+          </p>
+        )}
         <p className={`text-5xl font-bold mb-6 ${textColorClass}`}>
           KES {price}
           <span className="text-sm font-medium text-gray-500"> / month</span>
@@ -92,10 +98,7 @@ const PricingCard = ({
       <ul className="space-y-4 mb-8 text-left text-gray-700 flex-grow">
         {features.map((feature, index) => (
           <li key={index} className="flex items-center space-x-3">
-            <Check
-              className="flex-shrink-0 w-5 h-5 text-green-500"
-              aria-hidden="true"
-            />
+            <Check className="flex-shrink-0 w-5 h-5 text-green-500" />
             <span>{feature}</span>
           </li>
         ))}
@@ -124,10 +127,12 @@ const Billing = () => {
   const [daysRemaining, setDaysRemaining] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const plans = {
     standard: {
-      price: 599,
+      price: 499,
+      originalPrice: 999,
       features: [
         "Unlimited Stock Management",
         "Comprehensive Reports",
@@ -135,7 +140,7 @@ const Billing = () => {
       ],
     },
     pro: {
-      price: 1599,
+      price: 1499,
       features: [
         "Unlimited Stock Management",
         "Comprehensive Reports",
@@ -145,7 +150,7 @@ const Billing = () => {
       ],
     },
     elite: {
-      price: 3599,
+      price: 3499,
       features: [
         "Unlimited Stock Management",
         "Comprehensive Reports",
@@ -172,10 +177,8 @@ const Billing = () => {
 
               if (userData.subscriptionStatus === "active") {
                 setCurrentPlan(userData.plan);
-
                 const expiresAt = userData.expiresAt.toDate();
                 const now = new Date();
-
                 const timeDiff = expiresAt.getTime() - now.getTime();
                 const daysLeft = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
                 setDaysRemaining(daysLeft > 0 ? daysLeft : 0);
@@ -212,7 +215,13 @@ const Billing = () => {
       setError("Please sign in to start your free trial.");
       return;
     }
-    setIsLoading(true);
+
+    if (hasTrialBeenUsed) {
+      setError("You have already used your free trial.");
+      return;
+    }
+
+    setIsProcessing(true);
     setError("");
 
     try {
@@ -244,24 +253,31 @@ const Billing = () => {
       console.error("Failed to start free trial:", err);
       setError("Failed to start free trial. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
 
-  const handleSubscribe = async (planName) => {
+  const handleSubscribe = async (planName, price) => {
     if (!user) {
       setError("Please sign in to subscribe.");
       return;
     }
 
-    setIsLoading(true);
+    if (isProcessing) return;
+
+    setIsProcessing(true);
     setError("");
 
     try {
       const response = await fetch("/api/create-paystack-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid, plan: planName }),
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          plan: planName,
+          amount: price * 100, // Paystack requires lowest currency unit
+        }),
       });
 
       const data = await response.json();
@@ -270,16 +286,19 @@ const Billing = () => {
         throw new Error(data.message || "Failed to create checkout session.");
       }
 
-      if (data.authorizationUrl) {
-        window.location.href = data.authorizationUrl;
+      const authUrl =
+        data.authorizationUrl || data.authorization_url || data.authUrl;
+
+      if (authUrl) {
+        window.location.href = authUrl;
       } else {
-        throw new Error("Invalid response from server.");
+        throw new Error("Invalid response from payment service.");
       }
     } catch (err) {
       console.error("Paystack checkout failed:", err);
       setError("Payment processing failed. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
 
@@ -287,7 +306,7 @@ const Billing = () => {
 
   return (
     <>
-      {isLoading && <PageLoader />}
+      {(isLoading || isProcessing) && <PageLoader />}
       <div className="min-h-[90svh] bg-gray-50 flex items-center justify-center p-6 sm:p-8 font-sans">
         <div className="w-full max-w-6xl">
           <div className="text-center mb-14">
@@ -311,11 +330,13 @@ const Billing = () => {
             )}
             {canStartTrial && (
               <p className="mt-4 text-blue-600 font-semibold text-lg">
-                Start your 14-day free trial.
+                Start your 14-day free trial today!
               </p>
             )}
             {error && (
-              <p className="mt-4 text-red-500 text-sm font-medium">{error}</p>
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm font-medium">{error}</p>
+              </div>
             )}
           </div>
 
@@ -325,9 +346,10 @@ const Billing = () => {
                 key={planName}
                 planName={planName}
                 price={planDetails.price}
+                originalPrice={planDetails.originalPrice}
                 features={planDetails.features}
                 currentPlan={currentPlan}
-                canStartTrial={canStartTrial}
+                canStartTrial={canStartTrial && !isProcessing}
                 handleSubscribe={handleSubscribe}
                 handleFreeTrial={handleFreeTrial}
               />

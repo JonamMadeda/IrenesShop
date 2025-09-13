@@ -1,81 +1,130 @@
 import { NextResponse } from "next/server";
-import { getAuth } from "firebase-admin/auth";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
 import axios from "axios";
 
-// This is where we import your Firebase Admin SDK credentials from the specified path.
-import firebaseConfig from "@/firebase/firebase.config.js";
-
-// Initialize Firebase Admin only once
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(firebaseConfig),
-  });
-}
-
-const auth = getAuth();
-
-// Paystack secret key from our .env.local file
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+// Define plan amounts (KES × 100 because Paystack expects the lowest currency unit)
+const PLAN_AMOUNTS = {
+  standard: 49900, // KES 499
+  pro: 149900, // KES 1499
+  elite: 349900, // KES 3499
+};
 
 export async function POST(req) {
   try {
-    const { uid, plan } = await req.json();
+    const { uid, plan, email } = await req.json();
 
-    if (!uid || !plan) {
+    // Validate required fields
+    if (!uid || !plan || !email) {
       return NextResponse.json(
-        { message: "Missing uid or plan." },
+        { message: "Missing required fields: uid, plan, or email" },
         { status: 400 }
       );
     }
 
-    let amount;
-    switch (plan) {
-      case "standard":
-        amount = 99900; // Paystack works in cents for KES (1 KES = 100 cents)
-        break;
-      case "pro":
-        amount = 199900; // 1999 KES in cents
-        break;
-      case "elite":
-        amount = 399900; // 3999 KES in cents
-        break;
-      default:
-        return NextResponse.json(
-          { message: "Invalid plan selected." },
-          { status: 400 }
-        );
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { message: "Invalid email format" },
+        { status: 400 }
+      );
     }
 
-    // Make a secure API call to Paystack to initialize a transaction
-    const paystackResponse = await axios.post(
+    // Get amount for plan
+    const amount = PLAN_AMOUNTS[plan];
+    if (!amount) {
+      return NextResponse.json(
+        {
+          message: `Invalid plan selected: ${plan}. Available: ${Object.keys(
+            PLAN_AMOUNTS
+          ).join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log(
+      `Initializing payment: Plan=${plan}, Amount=${amount} (KES ${
+        amount / 100
+      }), Email=${email}`
+    );
+
+    // Initialize Paystack transaction
+    const response = await axios.post(
       "https://api.paystack.co/transaction/initialize",
       {
-        amount: amount,
-        email: "test.user@example.com", // In a real app, use the user's email from Firebase
+        email,
+        amount,
         currency: "KES",
-        // 👈 ADD THIS LINE
         callback_url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/verify-payment?uid=${uid}&plan=${plan}`,
+        metadata: {
+          uid: uid,
+          plan_name: plan,
+          custom_fields: [
+            {
+              display_name: "User ID",
+              variable_name: "user_id",
+              value: uid,
+            },
+          ],
+        },
       },
       {
         headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
       }
     );
 
-    // Send the secure authorization URL back to the client
+    if (!response.data.status) {
+      console.error("Paystack API Error:", response.data);
+      return NextResponse.json(
+        { message: response.data.message || "Payment initialization failed" },
+        { status: 400 }
+      );
+    }
+
+    console.log(
+      "Payment initialized successfully:",
+      response.data.data.reference
+    );
+
     return NextResponse.json({
-      authorizationUrl: paystackResponse.data.data.authorization_url,
+      status: true,
+      authorizationUrl: response.data.data.authorization_url,
+      reference: response.data.data.reference,
+      access_code: response.data.data.access_code,
     });
   } catch (error) {
     console.error(
-      "Paystack initialization error:",
-      error.response ? error.response.data : error.message
+      "Paystack Init Error:",
+      error.response?.data || error.message
     );
+
+    if (error.response?.data) {
+      const paystackError = error.response.data;
+
+      if (paystackError.code === "invalid_amount") {
+        return NextResponse.json(
+          {
+            message:
+              "Invalid amount. Please check your plan configuration in your API code.",
+          },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          message: paystackError.message || "Payment initialization failed",
+          error_code: paystackError.code,
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { message: "Failed to initialize payment.", error: error.message },
+      { message: "Internal server error. Please try again later." },
       { status: 500 }
     );
   }

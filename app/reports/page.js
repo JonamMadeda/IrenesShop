@@ -339,7 +339,8 @@ export default function Reports() {
     (sum, debt) => sum + (debt.totalAmount || 0),
     0
   );
-  const totalProfit = totalRevenue - totalCost - totalDebt;
+  // This is the line that was changed
+  const totalProfit = totalRevenue - totalCost;
   const totalItems = salesData.reduce((sum, sale) => sum + sale.quantity, 0);
 
   // Export to CSV function
@@ -405,7 +406,6 @@ export default function Reports() {
             <h1 className="text-3xl sm:text-3xl font-semibold text-gray-900 mb-1">
               Sales Reports 📈
             </h1>
-          
           </div>
           <div className="mt-4 sm:mt-0 flex items-center gap-2">
             <button

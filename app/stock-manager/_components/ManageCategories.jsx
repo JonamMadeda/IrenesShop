@@ -212,22 +212,29 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b pb-4">
-        <h4 className="text-xl font-bold text-gray-800 font-sans mb-2 sm:mb-0">
-          Add New Category
-        </h4>
-        <CreateCategoryForm
-          onCategoryAdded={handleCategoryAdded}
-          showAlert={showAlert}
-          db={db}
-          userId={userId}
-        />
+    <div className="w-full h-full p-6 bg-white rounded-xl shadow-md flex flex-col">
+      {/* Header for Add New Category */}
+      <div className="flex items-center space-x-2 mb-6">
+        <div className="p-2 rounded-full bg-blue-100 text-blue-700">
+          <PlusCircle className="w-5 h-5" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-800">Add a New Category</h2>
       </div>
-      <div className="space-y-4">
-        <h4 className="text-xl font-bold text-gray-800 font-sans">
-          Existing Categories
-        </h4>
+
+      <CreateCategoryForm
+        onCategoryAdded={handleCategoryAdded}
+        showAlert={showAlert}
+        db={db}
+        userId={userId}
+      />
+
+      {/* Existing Categories Section - Scrollable */}
+      <div className="flex-grow overflow-y-auto pr-4 pb-6 mt-6 space-y-4">
+        <div className="flex items-center space-x-2 mb-4">
+          <h2 className="text-xl font-bold text-gray-800">
+            Existing Categories
+          </h2>
+        </div>
         <div className="relative mb-4">
           <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
             <Search className="h-5 w-5 text-gray-400" />
