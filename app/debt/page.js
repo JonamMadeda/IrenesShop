@@ -16,7 +16,6 @@ import {
   signInWithCustomToken,
 } from "firebase/auth";
 
-// Correct import from your Firebase client file
 import { db, auth } from "@/firebase/firebase.client.js";
 
 import DebtTable from "./_components/DebtTable";
@@ -29,7 +28,7 @@ const initialAuthToken =
   typeof __initial_auth_token !== "undefined" ? __initial_auth_token : null;
 
 const DebtTracker = () => {
-  // State for form fields
+  // State variables
   const [customerFirstName, setCustomerFirstName] = useState("");
   const [customerLastName, setCustomerLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -40,7 +39,6 @@ const DebtTracker = () => {
   const [returnDate, setReturnDate] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // State for UI and status messages
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState({ type: "", message: "" });
@@ -55,11 +53,10 @@ const DebtTracker = () => {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState(() => () => {});
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Set initial dateTaken to the current date and set up auth listener
+  // 🔒 Subscription check and authentication
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     setDateTaken(today);
@@ -74,22 +71,60 @@ const DebtTracker = () => {
           }
         } catch (error) {
           console.error("Failed to sign in:", error);
+          window.location.href = "/";
+          return;
         }
       }
-      setUserId(user ? user.uid : null);
-      setIsAuthReady(true);
+
+      const currentUser = user || auth.currentUser;
+      if (!currentUser) {
+        console.log("No authenticated user found. Redirecting.");
+        window.location.href = "/";
+        return;
+      }
+
+      const userDocRef = doc(db, "users", currentUser.uid);
+      const unsubscribeUser = onSnapshot(
+        userDocRef,
+        (docSnap) => {
+          if (!docSnap.exists()) {
+            console.log("User record not found. Redirecting.");
+            window.location.href = "/";
+            return;
+          }
+
+          const userData = docSnap.data();
+          if (
+            userData?.subscriptionStatus === "active" &&
+            userData?.expiresAt?.toDate() > new Date()
+          ) {
+            setUserId(currentUser.uid);
+            setIsAuthReady(true);
+            setIsPageLoading(false);
+          } else {
+            console.log("Subscription expired or inactive. Redirecting.");
+            window.location.href = "/";
+          }
+        },
+        (err) => {
+          console.error("Error checking subscription:", err);
+          window.location.href = "/";
+        }
+      );
+
+      return () => unsubscribeUser();
     });
 
     return () => unsubscribeAuth();
   }, []);
 
-  // Real-time listener for debts and items collection
+  // 🧾 Real-time listener for debts and items
   useEffect(() => {
     if (isAuthReady && userId) {
       const debtCollectionRef = collection(db, `users/${userId}/debts`);
       const itemsCollectionRef = collection(db, `users/${userId}/items`);
 
-      const unsubscribeSnapshot = onSnapshot(
+      const unsubscribeDebts = onSnapshot(
         debtCollectionRef,
         (snapshot) => {
           const debtList = snapshot.docs.map((doc) => {
@@ -106,12 +141,10 @@ const DebtTracker = () => {
               (a, b) => new Date(b.dateTaken) - new Date(a.dateTaken)
             )
           );
-          setIsPageLoading(false);
         },
         (error) => {
           console.error("Error fetching debts:", error);
           showStatus("error", "Failed to load debt records.");
-          setIsPageLoading(false);
         }
       );
 
@@ -131,20 +164,19 @@ const DebtTracker = () => {
       );
 
       return () => {
-        unsubscribeSnapshot();
+        unsubscribeDebts();
         unsubscribeItems();
       };
     }
   }, [isAuthReady, userId]);
 
-  // Function to show a status message for a short period
+  // Utility: show status messages
   const showStatus = (type, message) => {
     setStatusMessage({ type, message });
-    setTimeout(() => {
-      setStatusMessage({ type: "", message: "" });
-    }, 4000);
+    setTimeout(() => setStatusMessage({ type: "", message: "" }), 4000);
   };
 
+  // 🧮 Form functions
   const openPopup = (record = null) => {
     setCurrentRecord(record);
     if (record) {
@@ -231,6 +263,7 @@ const DebtTracker = () => {
     }
   };
 
+  // 🗑️ Delete & Paid toggle
   const handleDelete = (id) => {
     setConfirmMessage(
       "Are you sure you want to delete this debt record? This action cannot be undone."
@@ -277,12 +310,10 @@ const DebtTracker = () => {
         setShowConfirmModal(false);
         setIsLoading(true);
         try {
-          // Move debt to sales collection
           const salesCollectionRef = collection(db, `users/${userId}/sales`);
           const salesRecord = { ...debt, paidAt: serverTimestamp() };
           await addDoc(salesCollectionRef, salesRecord);
 
-          // Delete the original debt record
           const debtDocRef = doc(db, `users/${userId}/debts`, debt.id);
           await deleteDoc(debtDocRef);
 
@@ -298,6 +329,7 @@ const DebtTracker = () => {
     setShowConfirmModal(true);
   };
 
+  // 🔍 Pagination and filters
   const overdueDebts = debts.filter(
     (debt) => !debt.isPaid && new Date(debt.returnDate) < new Date()
   );
@@ -314,25 +346,7 @@ const DebtTracker = () => {
     (showOverdueOnly ? overdueDebts.length : debts.length) / itemsPerPage
   );
 
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  const handlePrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  if (isPageLoading) {
-    return <PageLoader />;
-  }
+  if (isPageLoading) return <PageLoader />;
 
   return (
     <div className="min-h-[90vh] bg-gray-100 p-4 sm:p-8 font-sans antialiased">
@@ -352,57 +366,8 @@ const DebtTracker = () => {
           confirmAction={confirmAction}
           setShowConfirmModal={setShowConfirmModal}
         />
-        {(showOverdueOnly ? overdueDebts.length : debts.length) >
-          itemsPerPage && (
-          <div className="flex justify-center items-center mt-8 space-x-2">
-            <button
-              onClick={handlePrevPage}
-              disabled={currentPage === 1}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                currentPage === 1
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              Previous
-            </button>
-
-            {/* Hides page buttons on mobile, shows on sm and larger */}
-            <div className="hidden sm:flex space-x-2">
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i + 1}
-                  onClick={() => handlePageChange(i + 1)}
-                  className={`w-10 h-10 rounded-full font-semibold transition-colors ${
-                    currentPage === i + 1
-                      ? "bg-blue-600 text-white shadow-lg"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-
-            {/* Shows a simple page counter on mobile */}
-            <div className="sm:hidden text-center text-sm font-medium text-gray-700">
-              Page {currentPage} of {totalPages}
-            </div>
-
-            <button
-              onClick={handleNextPage}
-              disabled={currentPage === totalPages}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                currentPage === totalPages
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              Next
-            </button>
-          </div>
-        )}
       </div>
+
       <DebtForm
         isPopupOpen={isPopupOpen}
         closePopup={closePopup}
@@ -429,6 +394,7 @@ const DebtTracker = () => {
         isDropdownOpen={isDropdownOpen}
         setIsDropdownOpen={setIsDropdownOpen}
       />
+
       {showConfirmModal && (
         <ConfirmationModal
           message={confirmMessage}

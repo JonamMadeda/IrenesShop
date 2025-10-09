@@ -55,7 +55,7 @@ const getDateRange = (period, customDate = new Date()) => {
     case "yearly":
       return { start: startOfYear(date), end: endOfYear(date) };
     default:
-      return { start: startOfDay(date), end: endOfDay(date) };
+      return { start: startOfMonth(date), end: endOfMonth(date) }; // Changed default to monthly
   }
 };
 
@@ -130,9 +130,11 @@ const TopItems = ({ items, limit = 5 }) => (
 // Main Reports Page Component
 export default function Reports() {
   const [userId, setUserId] = useState(null);
-  const [period, setPeriod] = useState("daily");
+  // 💡 CHANGED: Default period to 'monthly'
+  const [period, setPeriod] = useState("monthly");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [dateRange, setDateRange] = useState(() => getDateRange("daily"));
+  // 💡 CHANGED: Initialize dateRange with 'monthly'
+  const [dateRange, setDateRange] = useState(() => getDateRange("monthly"));
   const [salesData, setSalesData] = useState([]);
   const [debtData, setDebtData] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -152,7 +154,7 @@ export default function Reports() {
       return `${format(start, "MMM dd")} - ${format(end, "MMM dd, yyyy")}`;
     if (period === "monthly") return `${format(start, "MMMM yyyy")}`;
     if (period === "yearly") return `${format(start, "yyyy")}`;
-    return format(start, "EEEE, MMMM dd, yyyy");
+    return format(start, "MMMM yyyy"); // Changed default display to monthly format
   };
 
   // Fetch user and data
@@ -393,12 +395,15 @@ export default function Reports() {
     );
   }
 
+  // Applying user-defined minimum height for the page container
+  const pageStyle = { minHeight: "90vh" };
+
   if (isLoading) {
     return <PageLoader />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 font-sans">
+    <div className="bg-gray-50 py-8 px-4 sm:px-6 font-sans" style={pageStyle}>
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex flex-col sm:flex-row items-center sm:items-center justify-between">

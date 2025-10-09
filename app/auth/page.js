@@ -2,16 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { initializeApp } from "firebase/app";
 import {
-  getAuth,
+  getAuth, // Not needed, but keep imports for functions
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import {
   Loader2,
   Mail,
@@ -24,180 +23,131 @@ import {
   EyeOff,
 } from "lucide-react";
 
+// 👇 IMPORT FIREBASE SERVICES FROM THE NEW CLIENT FILE
+import {
+  auth,
+  db,
+  firebaseReady as initialFirebaseReady,
+} from "@/firebase/firebase.client";
+
 /**
- * A functional component for a robust email and password authentication page.
- * This version is integrated with the user's provided Firebase configuration
- * and includes fields for first name, last name, and password confirmation.
- * It also redirects to a dashboard page upon successful authentication.
+ * A robust Firebase email/password authentication component.
+ * Uses centralized Firebase config and supports login, signup, and logout with Firestore user profiles.
  */
 export default function AuthPage() {
-  // State for authentication status and user data
+  // State for authentication and UI
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [firebaseReady, setFirebaseReady] = useState(false);
+  // Set initial state from imported status
+  const [firebaseReady, setFirebaseReady] = useState(initialFirebaseReady);
   const [error, setError] = useState(null);
-
-  // State for form inputs and toggling between login/sign-up
   const [isLogin, setIsLogin] = useState(true);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  // State for UI element visibility
   const [passwordVisible, setPasswordVisible] = useState(false);
-
-  const [auth, setAuth] = useState(null);
-  const [db, setDb] = useState(null);
+  // auth and db states are no longer necessary as they are imported directly.
+  // We'll keep them out to simplify the component.
 
   useEffect(() => {
-    try {
-      // NOTE: This firebaseConfig object is a direct representation
-      // of your firebase.client.js file. In your actual Next.js app,
-      // you would import this from '@/firebase/firebase.client.js'.
-      const firebaseConfig = {
-        apiKey: "AIzaSyAlPtH62gJesPafo4Tctv_fpyA174YgaAc",
-        authDomain: "joandmel-inventory.firebaseapp.com",
-        projectId: "joandmel-inventory",
-        storageBucket: "joandmel-inventory.firebasestorage.app",
-        messagingSenderId: "710541496722",
-        appId: "1:710541496722:web:82d8b0353dc6e3bdcdb14b",
-      };
-
-      const app = initializeApp(firebaseConfig);
-      const authInstance = getAuth(app);
-      const dbInstance = getFirestore(app);
-      setAuth(authInstance);
-      setDb(dbInstance);
-      setFirebaseReady(true);
-
-      // onAuthStateChanged listens for user sign-in/sign-out events
-      const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
-        if (currentUser) {
-          setUser(currentUser);
-          console.log("User is authenticated with UID:", currentUser.uid);
-          // Redirect the user to the dashboard if they are already logged in
-          if (window.location.pathname !== "/dashboard") {
-            window.location.href = "/dashboard";
-          }
-        } else {
-          setUser(null);
-          console.log("No user is currently authenticated.");
-        }
-        setLoading(false);
-      });
-
-      return () => unsubscribe(); // Cleanup the listener on component unmount
-    } catch (e) {
-      console.error("Firebase initialization failed:", e);
+    // Check if Firebase services are available
+    if (!auth || !db) {
       setError(
-        "Failed to initialize the application. Check your Firebase config."
+        "Failed to initialize Firebase services. Check your configuration."
       );
       setLoading(false);
+      return;
     }
-  }, []);
 
-  /**
-   * Toggles the password visibility.
-   */
-  const togglePasswordVisibility = () => {
-    setPasswordVisible(!passwordVisible);
-  };
+    // Listen for auth changes
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        console.log("User logged in:", currentUser.uid);
+        if (window.location.pathname !== "/dashboard") {
+          window.location.href = "/dashboard";
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
 
-  /**
-   * Handles form submission for both sign-in and sign-up.
-   * It prevents the default form action and calls the appropriate Firebase auth method.
-   */
+    return () => unsubscribe();
+  }, []); // auth and db are now stable imports, so no need to include them as dependencies
+
+  const togglePasswordVisibility = () => setPasswordVisible((prev) => !prev);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      if (!auth || !db) {
-        throw new Error("Firebase services are not initialized.");
-      }
+      // Services are imported, no need for the local check, but keep the early exit for safety
+      if (!auth || !db) throw new Error("Firebase services not ready.");
 
       if (isLogin) {
-        // Sign in an existing user
+        // Sign in user
         await signInWithEmailAndPassword(auth, email, password);
-        console.log("User signed in successfully. Redirecting to dashboard...");
       } else {
-        // Validation for sign-up
+        // Sign up new user
         if (password !== confirmPassword) {
           setError("Passwords do not match.");
           setLoading(false);
           return;
         }
 
-        // Create a new user account
         const userCredential = await createUserWithEmailAndPassword(
           auth,
           email,
           password
         );
         const newUser = userCredential.user;
-
-        // Set the user's display name
         const fullName = `${firstName.trim()} ${lastName.trim()}`;
-        if (fullName) {
-          await updateProfile(newUser, { displayName: fullName });
-        }
+        if (fullName) await updateProfile(newUser, { displayName: fullName });
 
-        // Save the user's details to a Firestore document
         await setDoc(doc(db, "users", newUser.uid), {
-          firstName: firstName,
-          lastName: lastName,
+          firstName,
+          lastName,
           email: newUser.email,
           createdAt: new Date(),
         });
-        console.log(
-          "User account and profile created successfully. Redirecting to dashboard..."
-        );
+        console.log("User created successfully.");
       }
-      // UI will be updated by the onAuthStateChanged listener which will handle the redirection
     } catch (e) {
       console.error("Authentication error:", e.code, e.message);
-      let errorMessage = "An unknown error occurred.";
-      if (e.code === "auth/invalid-email") {
-        errorMessage = "Please enter a valid email address.";
-      } else if (
-        e.code === "auth/wrong-password" ||
-        e.code === "auth/user-not-found"
-      ) {
-        errorMessage = "Incorrect email or password.";
-      } else if (e.code === "auth/email-already-in-use") {
-        errorMessage = "An account with this email already exists.";
-      } else if (e.code === "auth/weak-password") {
-        errorMessage = "Password should be at least 6 characters.";
-      }
-      setError(errorMessage);
+      let message = "An unknown error occurred.";
+      if (e.code === "auth/invalid-email") message = "Invalid email address.";
+      else if (
+        e.code === "auth/user-not-found" ||
+        e.code === "auth/wrong-password"
+      )
+        message = "Incorrect email or password.";
+      else if (e.code === "auth/email-already-in-use")
+        message = "This email is already registered.";
+      else if (e.code === "auth/weak-password")
+        message = "Password must be at least 6 characters.";
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Handles user sign-out.
-   */
   const handleSignOut = async () => {
     setLoading(true);
-    setError(null);
     try {
-      if (!auth) {
-        throw new Error("Auth service not initialized.");
-      }
       await signOut(auth);
     } catch (e) {
-      console.error("Sign out error:", e);
+      console.error("Sign out failed:", e);
       setError("Failed to sign out.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Main render logic based on authentication state
   return (
     <div className="flex items-center justify-center p-8 bg-gray-100 min-h-screen font-sans">
       <motion.div
@@ -214,14 +164,12 @@ export default function AuthPage() {
           {isLogin ? "Welcome Back" : "Create Account"}
         </h1>
 
-        {/* Display content based on authentication state */}
         {loading || !firebaseReady ? (
           <div className="flex flex-col items-center py-8">
             <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
             <p className="mt-4 text-gray-600">{error || "Loading..."}</p>
           </div>
         ) : user ? (
-          // User is authenticated, show their details and a sign-out button
           <div className="text-center">
             <h2 className="text-xl font-bold mt-4 text-gray-800">
               Welcome, {user.displayName || "User"}!
@@ -241,13 +189,11 @@ export default function AuthPage() {
             </button>
           </div>
         ) : (
-          // User is not authenticated, show the login/sign-up form
           <>
             <p className="text-gray-700 text-center mb-6">
               Please {isLogin ? "sign in" : "sign up"} to continue.
             </p>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* First and Last Name fields (only for sign-up) */}
               {!isLogin && (
                 <>
                   <div>
@@ -269,6 +215,7 @@ export default function AuthPage() {
                       />
                     </div>
                   </div>
+
                   <div>
                     <label htmlFor="lastName" className="sr-only">
                       Last Name
@@ -291,7 +238,6 @@ export default function AuthPage() {
                 </>
               )}
 
-              {/* Email Input Field */}
               <div>
                 <label htmlFor="email" className="sr-only">
                   Email
@@ -312,7 +258,6 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              {/* Password Input Field */}
               <div>
                 <label htmlFor="password" className="sr-only">
                   Password
@@ -346,7 +291,6 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              {/* Confirm Password Field (only for sign-up) */}
               {!isLogin && (
                 <div>
                   <label htmlFor="confirmPassword" className="sr-only">
@@ -382,14 +326,12 @@ export default function AuthPage() {
                 </div>
               )}
 
-              {/* Display authentication error messages */}
               {error && (
                 <p className="text-red-600 text-sm text-center font-medium">
                   {error}
                 </p>
               )}
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
@@ -409,7 +351,6 @@ export default function AuthPage() {
               </button>
             </form>
 
-            {/* Toggle between login and sign-up */}
             <div className="mt-6 text-center text-sm">
               <p className="text-gray-600">
                 {isLogin

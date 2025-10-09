@@ -32,17 +32,16 @@ export default function Navbar({ isExpired = false }) {
     : allNavLinks;
 
   return (
-    // The main navigation container. It uses a clean white background,
-    // a subtle shadow, and the specified font-sans style.
-    <nav className="bg-white border-b border-gray-300 p-4 shadow-md font-sans">
+    // The main navigation container.
+    // ADDED: min-h-[10svh] to the main nav element for desktop/tablet view (md: prefix).
+    <nav className="bg-white border-b border-gray-300 p-4 shadow-md font-sans md:min-h-[10svh] md:flex md:items-center">
       <div className="container mx-auto flex justify-between items-center">
         {/* The brand or logo section, now a clickable link to the dashboard. */}
-        <a href="/dashboard" className="text-xl font-bold">
+        <a href="/dashboard" className="text-2xl font-bold">
           Jonam
         </a>
 
-        {/* The main navigation links, visible on medium screens and up.
-            We map over the navLinks array to render the links dynamically. */}
+        {/* The main navigation links, visible on medium screens and up. */}
         <div className="hidden md:flex space-x-6">
           {navLinks.map((link) => (
             <a
@@ -96,9 +95,10 @@ export default function Navbar({ isExpired = false }) {
         </div>
       </div>
 
-      {/* The collapsible mobile menu. Now a full-screen overlay. */}
+      {/* The collapsible mobile menu. Full-screen overlay. */}
       {isOpen && (
-        <div className="md:hidden fixed inset-0 bg-white p-6 z-50 flex flex-col justify-center">
+        // Kept the mobile menu as full viewport height (h-screen)
+        <div className="md:hidden fixed inset-0 bg-white p-6 z-50 flex flex-col justify-center h-screen">
           {/* Close button at the top right of the full-screen menu */}
           <button
             onClick={toggleMenu}
@@ -125,7 +125,8 @@ export default function Navbar({ isExpired = false }) {
               <a
                 key={link.name}
                 href={link.href}
-                className="w-full text-left border-b border-gray-700 text-2xl font-semibold text-gray-800 hover:text-blue-600 transition-colors"
+                // Cleaned up the mobile link styling to remove the border-b
+                className="w-full text-center p-3 text-2xl font-semibold text-gray-800 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-colors"
                 onClick={toggleMenu} // Close menu on link click
               >
                 {link.name}

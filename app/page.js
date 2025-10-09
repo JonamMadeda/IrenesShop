@@ -91,8 +91,9 @@ export default function HomePage() {
 
   if (modalContent) {
     return (
-      <main className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl text-center">
+      // 👇 Key changes are here: fixed, inset-0 (or top-0 left-0), w-screen, h-screen, z-50
+      <div className="fixed inset-0 w-screen h-screen flex items-center justify-center bg-gray-900 bg-opacity-75 z-50">
+        <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-2xl text-center w-11/12 max-w-sm">
           <h2
             className={`text-2xl font-bold mb-4 font-sans ${
               modalContent.isExpired ? "text-red-600" : "text-green-600"
@@ -112,7 +113,7 @@ export default function HomePage() {
             {modalContent.buttonText}
           </button>
         </div>
-      </main>
+      </div>
     );
   }
 

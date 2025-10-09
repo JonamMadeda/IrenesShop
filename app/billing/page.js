@@ -131,7 +131,7 @@ const Billing = () => {
 
   const plans = {
     standard: {
-      price: 499,
+      price: 299,
       originalPrice: 999,
       features: [
         "Unlimited Stock Management",
@@ -140,7 +140,7 @@ const Billing = () => {
       ],
     },
     pro: {
-      price: 1499,
+      price: 599,
       features: [
         "Unlimited Stock Management",
         "Comprehensive Reports",
@@ -150,7 +150,7 @@ const Billing = () => {
       ],
     },
     elite: {
-      price: 3499,
+      price: 2599,
       features: [
         "Unlimited Stock Management",
         "Comprehensive Reports",

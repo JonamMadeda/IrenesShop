@@ -3,9 +3,9 @@ import axios from "axios";
 
 // Define plan amounts (KES × 100 because Paystack expects the lowest currency unit)
 const PLAN_AMOUNTS = {
-  standard: 49900, // KES 499
-  pro: 149900, // KES 1499
-  elite: 349900, // KES 3499
+  standard: 29900, // KES 299
+  pro: 59900, // KES 599
+  elite: 259900, // KES 2599
 };
 
 export async function POST(req) {

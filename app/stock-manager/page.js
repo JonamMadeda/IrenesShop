@@ -92,14 +92,16 @@ const ConfirmModal = ({ show, title, message, onConfirm, onCancel }) => {
   );
 };
 
-// ---------- Modal Wrapper ----------
+// ---------- Modal Wrapper (Modified for font-weight and height) ----------
 const Modal = ({ show, title, onClose, children }) => {
   if (!show) return null;
   return (
     <div className="fixed inset-0 bg-white bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50 font-sans">
-      <div className="relative p-8 bg-white text-gray-900 w-full max-w-lg rounded-xl transform transition-all duration-300 scale-100 shadow-2xl">
-        <div className="flex justify-between items-center pb-4 border-b-2 border-gray-200 mb-4">
-          <h3 className="text-3xl font-extrabold text-blue-700 font-sans">
+      {/* Added max-h-full and overflow-y-auto for mobile height control */}
+      <div className="relative p-6 bg-white text-gray-900 w-full max-w-lg rounded-xl transform transition-all duration-300 scale-100 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center pb-4 border-b-2 border-gray-200 mb-4 sticky top-0 bg-white z-10">
+          {/* Title changed to font-semibold */}
+          <h3 className="text-3xl font-semibold text-blue-700 font-sans">
             {title}
           </h3>
           <button
@@ -136,8 +138,7 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [userDisplayName, setUserDisplayName] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Removed email and password states as the auth form is removed
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [categories, setCategories] = useState([]);
 
@@ -145,8 +146,8 @@ const App = () => {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       if (!currentUser) {
-        setUser(null);
-        setIsLoading(false);
+        // 👇 REDIRECT UNATHENTICATED USER TO /auth
+        window.location.href = "/auth";
         return;
       }
 
@@ -179,6 +180,7 @@ const App = () => {
           });
           return () => unsubscribeCategories();
         } else {
+          // 👇 Redirect if user exists but subscription is inactive/expired/missing doc
           window.location.href = "/";
         }
       });
@@ -187,29 +189,9 @@ const App = () => {
     return () => unsubscribeAuth();
   }, []);
 
-  // ---------- Auth Handlers ----------
-  const handleSignUp = async () => {
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      showAlert("User signed up!", "Success!");
-    } catch {
-      showAlert("Error signing up. Try again.", "Error!");
-    }
-  };
+  // Removed handleSignUp and handleLogin
 
-  const handleLogin = async () => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      showAlert("Logged in!", "Success!");
-    } catch {
-      showAlert("Error logging in.", "Error!");
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    showAlert("Logged out successfully.", "Logout");
-  };
+  // Removed handleLogout since the user wants it handled elsewhere
 
   // ---------- Modal + Alerts ----------
   const openModal = (title, content) =>
@@ -318,67 +300,28 @@ const App = () => {
   // ---------- Loading ----------
   if (isLoading) return <PageLoader />;
 
-  // ---------- Auth UI ----------
+  // 👇 Removed unauthenticated UI. Since `onAuthStateChanged` redirects,
+  // this block will only be reached if user is null *and* the redirect
+  // hasn't taken effect yet, but we rely on the redirect now.
   if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-8 rounded-xl w-full max-w-sm shadow-2xl space-y-6">
-          <h1 className="text-3xl font-bold text-blue-700 text-center">
-            Welcome
-          </h1>
-          <p className="text-center text-gray-600">
-            Sign up or log in to manage inventory.
-          </p>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            className="w-full px-4 py-3 border rounded-xl"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full px-4 py-3 border rounded-xl"
-          />
-          <div className="flex flex-col space-y-4">
-            <button
-              onClick={handleLogin}
-              className="bg-green-600 text-white py-3 rounded-xl"
-            >
-              Login
-            </button>
-            <button
-              onClick={handleSignUp}
-              className="bg-blue-700 text-white py-3 rounded-xl"
-            >
-              Sign Up
-            </button>
-          </div>
-        </div>
-        <AlertModal
-          show={alertState.show}
-          title={alertState.title}
-          message={alertState.message}
-          onClose={closeAlert}
-        />
-      </div>
-    );
+    // Return null or a minimal loader while redirection happens
+    return <PageLoader />;
   }
 
   // ---------- Main Dashboard ----------
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-4 font-sans">
+    <div className="min-h-[90vh] bg-gray-50 flex flex-col items-center p-4 font-sans">
       <div className="bg-white p-6 rounded-xl w-full max-w-7xl shadow-2xl">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-blue-700">
             Inventory Manager
           </h1>
-          <p className="hidden sm:block text-gray-500">
-            Welcome, {userDisplayName}
-          </p>
+          {/* Removed the Logout button container */}
+          <div className="flex items-center space-x-4">
+            <p className="hidden sm:block text-gray-500">
+              Welcome, {userDisplayName}
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
