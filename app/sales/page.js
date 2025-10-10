@@ -259,7 +259,9 @@ const SalesPage = () => {
 
   return (
     <div className="min-h-[90svh] w-full flex justify-center bg-gray-100 font-sans p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-7xl">
+      <div className="w-full max-w-7xl bg-white rounded-xl shadow-lg p-4 sm:p-6 lg:p-8">
+        {" "}
+        {/* Applied bg-white and padding here */}
         <div className="flex flex-col sm:flex-row justify-between items-center sm:items-center mb-6">
           <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-4 sm:mb-0">
             Sales Records 📈
@@ -274,7 +276,6 @@ const SalesPage = () => {
             Record New Sale
           </button>
         </div>
-
         {/* Period Selector & Date Navigation */}
         <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 mb-8 flex flex-col sm:flex-row items-center sm:items-center justify-between relative z-40">
           <div className="flex items-center space-x-4">
@@ -308,14 +309,12 @@ const SalesPage = () => {
             ))}
           </div>
         </div>
-
         <SalesSummary
           totalSalesRecords={totalSalesRecords}
           totalRevenue={totalRevenue}
           totalProfit={totalProfit}
           totalItemsSold={totalItemsSold}
         />
-
         <SalesTable
           sales={currentSales}
           loading={loading}
@@ -323,7 +322,6 @@ const SalesPage = () => {
           onEdit={handleEdit}
           onDeleteClick={handleDeleteClick}
         />
-
         {sales.length > itemsPerPage && (
           <nav className="mt-4 flex justify-center items-center space-x-4">
             <button
@@ -345,7 +343,6 @@ const SalesPage = () => {
             </button>
           </nav>
         )}
-
         {isModalOpen && (
           <RecordSaleModal
             isOpen={isModalOpen}
@@ -356,7 +353,6 @@ const SalesPage = () => {
             initialData={editingSale}
           />
         )}
-
         {isConfirmOpen && (
           <ConfirmModal
             message={confirmMessage}
@@ -364,7 +360,6 @@ const SalesPage = () => {
             onCancel={handleCloseConfirmModal}
           />
         )}
-
         {/* Success Notification */}
         {successMessage && (
           <div className="fixed bottom-4 right-4 z-50">
