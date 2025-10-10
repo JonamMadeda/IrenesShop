@@ -1,16 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  getAuth, // Not needed, but keep imports for functions
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import {
   Loader2,
   Mail,
@@ -21,24 +20,18 @@ import {
   LogOut,
   Eye,
   EyeOff,
+  AlertTriangle,
 } from "lucide-react";
 
-// 👇 IMPORT FIREBASE SERVICES FROM THE NEW CLIENT FILE
 import {
   auth,
   db,
   firebaseReady as initialFirebaseReady,
 } from "@/firebase/firebase.client";
 
-/**
- * A robust Firebase email/password authentication component.
- * Uses centralized Firebase config and supports login, signup, and logout with Firestore user profiles.
- */
 export default function AuthPage() {
-  // State for authentication and UI
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Set initial state from imported status
   const [firebaseReady, setFirebaseReady] = useState(initialFirebaseReady);
   const [error, setError] = useState(null);
   const [isLogin, setIsLogin] = useState(true);
@@ -48,35 +41,42 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
-  // auth and db states are no longer necessary as they are imported directly.
-  // We'll keep them out to simplify the component.
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
-    // Check if Firebase services are available
     if (!auth || !db) {
-      setError(
-        "Failed to initialize Firebase services. Check your configuration."
-      );
+      setError("Failed to initialize Firebase services.");
       setLoading(false);
       return;
     }
 
-    // Listen for auth changes
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
-        console.log("User logged in:", currentUser.uid);
-        if (window.location.pathname !== "/dashboard") {
-          window.location.href = "/dashboard";
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+
+        if (userDoc.exists()) {
+          setUser(currentUser);
+          setShowAuthModal(false);
+          console.log("User logged in:", currentUser.uid);
+          if (window.location.pathname !== "/dashboard") {
+            window.location.href = "/dashboard";
+          }
+        } else {
+          // User exists in auth but not in Firestore
+          console.warn("User profile not found in Firestore.");
+          setShowAuthModal(true);
+          setUser(null);
         }
       } else {
+        // No user logged in
+        setShowAuthModal(true);
         setUser(null);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []); // auth and db are now stable imports, so no need to include them as dependencies
+  }, []);
 
   const togglePasswordVisibility = () => setPasswordVisible((prev) => !prev);
 
@@ -86,14 +86,11 @@ export default function AuthPage() {
     setError(null);
 
     try {
-      // Services are imported, no need for the local check, but keep the early exit for safety
       if (!auth || !db) throw new Error("Firebase services not ready.");
 
       if (isLogin) {
-        // Sign in user
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        // Sign up new user
         if (password !== confirmPassword) {
           setError("Passwords do not match.");
           setLoading(false);
@@ -121,10 +118,7 @@ export default function AuthPage() {
       console.error("Authentication error:", e.code, e.message);
       let message = "An unknown error occurred.";
       if (e.code === "auth/invalid-email") message = "Invalid email address.";
-      else if (
-        e.code === "auth/user-not-found" ||
-        e.code === "auth/wrong-password"
-      )
+      else if (["auth/user-not-found", "auth/wrong-password"].includes(e.code))
         message = "Incorrect email or password.";
       else if (e.code === "auth/email-already-in-use")
         message = "This email is already registered.";
@@ -140,6 +134,8 @@ export default function AuthPage() {
     setLoading(true);
     try {
       await signOut(auth);
+      setUser(null);
+      setShowAuthModal(true);
     } catch (e) {
       console.error("Sign out failed:", e);
       setError("Failed to sign out.");
@@ -149,224 +145,155 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="flex items-center justify-center p-8 bg-gray-100 min-h-screen font-sans">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-        className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200"
-      >
-        <div className="flex justify-center mb-6">
-          <User className="w-16 h-16 text-blue-600" />
-        </div>
-
-        <h1 className="text-3xl font-bold text-gray-900 mb-6 text-center">
-          {isLogin ? "Welcome Back" : "Create Account"}
-        </h1>
-
-        {loading || !firebaseReady ? (
-          <div className="flex flex-col items-center py-8">
-            <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-            <p className="mt-4 text-gray-600">{error || "Loading..."}</p>
-          </div>
-        ) : user ? (
-          <div className="text-center">
-            <h2 className="text-xl font-bold mt-4 text-gray-800">
-              Welcome, {user.displayName || "User"}!
-            </h2>
-            <p className="text-gray-600 text-sm mt-2">{user.email}</p>
-            <p className="mt-2 text-gray-700 text-sm break-all">
-              Your User ID:{" "}
-              <span className="font-mono text-gray-800 font-semibold">
-                {user.uid}
-              </span>
-            </p>
-            <button
-              onClick={handleSignOut}
-              className="mt-6 w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans">
+      {/* Auth Modal */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 relative"
             >
-              <LogOut className="mr-2 h-5 w-5" /> Sign Out
-            </button>
-          </div>
-        ) : (
-          <>
-            <p className="text-gray-700 text-center mb-6">
-              Please {isLogin ? "sign in" : "sign up"} to continue.
-            </p>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {!isLogin && (
-                <>
-                  <div>
-                    <label htmlFor="firstName" className="sr-only">
-                      First Name
-                    </label>
-                    <div className="relative rounded-xl shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="text"
-                        id="firstName"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="First Name"
-                        required
-                      />
-                    </div>
-                  </div>
+              <button
+                className="absolute top-3 right-4 text-gray-400 hover:text-gray-600"
+                onClick={() => setShowAuthModal(false)}
+              >
+                ✕
+              </button>
 
-                  <div>
-                    <label htmlFor="lastName" className="sr-only">
-                      Last Name
-                    </label>
-                    <div className="relative rounded-xl shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="text"
-                        id="lastName"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="Last Name"
-                        required
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label htmlFor="email" className="sr-only">
-                  Email
-                </label>
-                <div className="relative rounded-xl shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="email"
-                    id="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Email address"
-                    required
-                  />
-                </div>
+              <div className="flex flex-col items-center mb-4">
+                <AlertTriangle className="w-12 h-12 text-yellow-500 mb-2" />
+                <h2 className="text-xl font-bold text-gray-800">
+                  Authentication Required
+                </h2>
+                <p className="text-gray-600 text-sm text-center mt-1">
+                  Please sign in or create an account to continue.
+                </p>
               </div>
 
-              <div>
-                <label htmlFor="password" className="sr-only">
-                  Password
-                </label>
-                <div className="relative rounded-xl shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type={passwordVisible ? "text" : "password"}
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Password"
-                    required
-                  />
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                    <button
-                      type="button"
-                      onClick={togglePasswordVisibility}
-                      className="text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      {passwordVisible ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {!isLogin && (
-                <div>
-                  <label htmlFor="confirmPassword" className="sr-only">
-                    Confirm Password
-                  </label>
-                  <div className="relative rounded-xl shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-gray-400" />
-                    </div>
+              <form onSubmit={handleSubmit} className="space-y-5 mt-4">
+                {!isLogin && (
+                  <>
                     <input
-                      type={passwordVisible ? "text" : "password"}
-                      id="confirmPassword"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="Confirm Password"
+                      type="text"
+                      placeholder="First Name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                      <button
-                        type="button"
-                        onClick={togglePasswordVisibility}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        {passwordVisible ? (
-                          <EyeOff className="h-5 w-5" />
-                        ) : (
-                          <Eye className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <p className="text-red-600 text-sm text-center font-medium">
-                  {error}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : isLogin ? (
-                  <>
-                    <LogIn className="mr-2 h-5 w-5" /> Sign In
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="mr-2 h-5 w-5" /> Sign Up
+                    <input
+                      type="text"
+                      placeholder="Last Name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
                   </>
                 )}
-              </button>
-            </form>
 
-            <div className="mt-6 text-center text-sm">
-              <p className="text-gray-600">
-                {isLogin
-                  ? "Don't have an account?"
-                  : "Already have an account?"}
+                <input
+                  type="email"
+                  placeholder="Email Address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+
+                <div className="relative">
+                  <input
+                    type={passwordVisible ? "text" : "password"}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={togglePasswordVisibility}
+                    className="absolute right-3 top-2 text-gray-400 hover:text-gray-600"
+                  >
+                    {passwordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+
+                {!isLogin && (
+                  <input
+                    type={passwordVisible ? "text" : "password"}
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                )}
+
+                {error && (
+                  <p className="text-red-600 text-sm text-center">{error}</p>
+                )}
+
                 <button
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="font-medium text-blue-600 hover:text-blue-500 ml-1 transition-colors"
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-2 rounded-xl font-medium hover:bg-blue-700 transition-all"
+                  disabled={loading}
                 >
-                  {isLogin ? "Sign up" : "Sign in"}
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 mx-auto animate-spin" />
+                  ) : isLogin ? (
+                    <>
+                      <LogIn className="inline-block mr-1 h-4 w-4" /> Sign In
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="inline-block mr-1 h-4 w-4" /> Sign Up
+                    </>
+                  )}
                 </button>
-              </p>
-            </div>
-          </>
+              </form>
+
+              <div className="text-center mt-4 text-sm">
+                <p className="text-gray-600">
+                  {isLogin ? "Don't have an account?" : "Already registered?"}
+                  <button
+                    onClick={() => setIsLogin(!isLogin)}
+                    className="text-blue-600 font-medium ml-1 hover:underline"
+                  >
+                    {isLogin ? "Sign up" : "Sign in"}
+                  </button>
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
-      </motion.div>
+      </AnimatePresence>
+
+      {/* Logged in view */}
+      {!showAuthModal && user && (
+        <div className="text-center bg-white p-8 rounded-2xl shadow-md">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">
+            Welcome, {user.displayName || "User"}!
+          </h2>
+          <p className="text-gray-600">{user.email}</p>
+          <button
+            onClick={handleSignOut}
+            className="mt-6 bg-red-600 text-white px-6 py-2 rounded-xl hover:bg-red-700 transition-all flex items-center mx-auto"
+          >
+            <LogOut className="mr-2 h-5 w-5" /> Sign Out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
