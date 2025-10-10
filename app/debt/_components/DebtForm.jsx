@@ -50,8 +50,9 @@ const DebtForm = ({
     setIsDropdownOpen(false);
   };
 
+  // Safely access itemName for filtering
   const filteredItems = items.filter((item) =>
-    item.name.toLowerCase().includes(itemName.toLowerCase())
+    item.name.toLowerCase().includes((itemName || "").toLowerCase())
   );
 
   if (!isPopupOpen) {
@@ -83,7 +84,8 @@ const DebtForm = ({
                 <input
                   type="text"
                   id="customerFirstName"
-                  value={customerFirstName}
+                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
+                  value={customerFirstName ?? ""}
                   onChange={(e) => setCustomerFirstName(e.target.value)}
                   required
                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -99,7 +101,8 @@ const DebtForm = ({
                 <input
                   type="text"
                   id="customerLastName"
-                  value={customerLastName}
+                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
+                  value={customerLastName ?? ""}
                   onChange={(e) => setCustomerLastName(e.target.value)}
                   required
                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -116,7 +119,8 @@ const DebtForm = ({
               <input
                 type="tel"
                 id="phoneNumber"
-                value={phoneNumber}
+                // 🛠️ FIX APPLIED: ensures controlled input starts with a string
+                value={phoneNumber ?? ""}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -131,7 +135,8 @@ const DebtForm = ({
               <input
                 type="text"
                 id="itemName"
-                value={itemName}
+                // 🛠️ FIX APPLIED: ensures controlled input starts with a string
+                value={itemName ?? ""}
                 onChange={(e) => {
                   setItemName(e.target.value);
                   setIsDropdownOpen(true);
@@ -172,7 +177,8 @@ const DebtForm = ({
                 <input
                   type="number"
                   id="itemQuantity"
-                  value={itemQuantity}
+                  // 🛠️ FIX APPLIED: uses || 0 for number input defaults
+                  value={itemQuantity || 0}
                   onChange={(e) => setItemQuantity(Number(e.target.value))}
                   min="1"
                   required
@@ -189,7 +195,8 @@ const DebtForm = ({
                 <input
                   type="number"
                   id="itemPrice"
-                  value={itemPrice}
+                  // 🛠️ FIX APPLIED: uses || 0 for number input defaults
+                  value={itemPrice || 0}
                   readOnly
                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-500"
                 />
@@ -206,7 +213,8 @@ const DebtForm = ({
                 <input
                   type="date"
                   id="dateTaken"
-                  value={dateTaken}
+                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
+                  value={dateTaken ?? ""}
                   onChange={(e) => setDateTaken(e.target.value)}
                   required
                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -222,7 +230,8 @@ const DebtForm = ({
                 <input
                   type="date"
                   id="returnDate"
-                  value={returnDate}
+                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
+                  value={returnDate ?? ""}
                   onChange={(e) => setReturnDate(e.target.value)}
                   required
                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"

@@ -22,6 +22,9 @@ import DebtTable from "./_components/DebtTable";
 import DebtForm from "./_components/DebtForm";
 import ConfirmationModal from "./_components/ConfirmationModal";
 import PageLoader from "@/app/components/PageLoader";
+import DebtSummary from "./_components/DebtSummary";
+import DebtHeader from "./_components/DebtHeader";
+import DateFilter from "./_components/DateFilter";
 
 // Global variables provided by the environment
 const initialAuthToken =
@@ -56,10 +59,18 @@ const DebtTracker = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // 📅 State for Date Filtering
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [activeRange, setActiveRange] = useState("Monthly"); // Default to 'Monthly'
+
   // 🔒 Subscription check and authentication
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     setDateTaken(today);
+    // Setting initial date state on mount
+    setSelectedDate(today);
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -132,6 +143,7 @@ const DebtTracker = () => {
             return {
               id: doc.id,
               ...data,
+              // Convert Firestore Timestamps to YYYY-MM-DD strings for form inputs
               dateTaken: data.dateTaken.toDate().toISOString().slice(0, 10),
               returnDate: data.returnDate.toDate().toISOString().slice(0, 10),
             };
@@ -178,8 +190,12 @@ const DebtTracker = () => {
 
   // 🧮 Form functions
   const openPopup = (record = null) => {
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().slice(0, 10);
+
     setCurrentRecord(record);
     if (record) {
+      // Logic for EDITING an existing record
       setCustomerFirstName(record.customerFirstName);
       setCustomerLastName(record.customerLastName);
       setPhoneNumber(record.phoneNumber);
@@ -189,13 +205,15 @@ const DebtTracker = () => {
       setDateTaken(record.dateTaken);
       setReturnDate(record.returnDate);
     } else {
+      // Logic for CREATING a new record
       setCustomerFirstName("");
       setCustomerLastName("");
       setPhoneNumber("");
       setItemName("");
       setItemQuantity(1);
       setItemPrice(0);
-      setDateTaken(new Date().toISOString().slice(0, 10));
+      // ✅ Set default 'Date Taken' to today's date
+      setDateTaken(today);
       setReturnDate("");
     }
     setIsPopupOpen(true);
@@ -229,7 +247,9 @@ const DebtTracker = () => {
     }
 
     const totalAmount = itemQuantity * itemPrice;
-    const debtRecord = {
+
+    // Base object for record (without server timestamp)
+    let debtData = {
       customerFirstName,
       customerLastName,
       phoneNumber,
@@ -240,18 +260,28 @@ const DebtTracker = () => {
       dateTaken: new Date(dateTaken),
       returnDate: new Date(returnDate),
       isPaid: false,
-      createdAt: serverTimestamp(),
     };
 
     try {
       const debtCollectionRef = collection(db, `users/${userId}/debts`);
 
-      if (currentRecord) {
+      // 🔄 EDITING: Execute update only if currentRecord exists AND has a valid ID.
+      if (currentRecord && currentRecord.id) {
         const docRef = doc(db, debtCollectionRef.path, currentRecord.id);
-        await updateDoc(docRef, debtRecord);
+
+        // Use debtData for the update (avoids setting a new createdAt timestamp)
+        await updateDoc(docRef, debtData);
+
         showStatus("success", "Debt record updated successfully!");
-      } else {
-        await addDoc(debtCollectionRef, debtRecord);
+      }
+      // ➕ ADDING NEW RECORD: Execute if currentRecord is null or doesn't have an ID.
+      else {
+        // Only set createdAt for new records
+        const newDebtRecord = {
+          ...debtData,
+          createdAt: serverTimestamp(),
+        };
+        await addDoc(debtCollectionRef, newDebtRecord);
         showStatus("success", "Debt record saved successfully!");
       }
       closePopup();
@@ -311,6 +341,7 @@ const DebtTracker = () => {
         setIsLoading(true);
         try {
           const salesCollectionRef = collection(db, `users/${userId}/sales`);
+          // We include the existing debt fields and add the paidAt timestamp
           const salesRecord = { ...debt, paidAt: serverTimestamp() };
           await addDoc(salesCollectionRef, salesRecord);
 
@@ -346,11 +377,39 @@ const DebtTracker = () => {
     (showOverdueOnly ? overdueDebts.length : debts.length) / itemsPerPage
   );
 
+  // 📊 Summary Calculations for DebtSummary
+  const totalDebts = debts.length;
+  const totalDebtAmount = debts.reduce(
+    (sum, debt) => sum + debt.totalAmount,
+    0
+  );
+  const totalOverdueAmount = overdueDebts.reduce(
+    (sum, debt) => sum + debt.totalAmount,
+    0
+  );
+  const totalItems = debts.reduce((sum, debt) => sum + debt.itemQuantity, 0);
+
   if (isPageLoading) return <PageLoader />;
 
   return (
     <div className="min-h-[90vh] bg-gray-100 p-4 sm:p-8 font-sans antialiased">
       <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-2xl p-6 sm:p-12 border border-gray-100">
+        <DebtHeader openPopup={openPopup} />
+
+        <DateFilter
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          activeRange={activeRange}
+          setActiveRange={setActiveRange}
+        />
+
+        <DebtSummary
+          totalDebts={totalDebts}
+          totalDebtAmount={totalDebtAmount}
+          totalOverdueAmount={totalOverdueAmount}
+          totalItems={totalItems}
+        />
+
         <DebtTable
           debts={debts}
           overdueDebts={overdueDebts}

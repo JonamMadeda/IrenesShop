@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import ConfirmationModal from "./ConfirmationModal";
-import DebtSummary from "./DebtSummary";
+// Removed: import DebtSummary from "./DebtSummary";
 
 const DebtTable = ({
   debts,
@@ -19,6 +19,8 @@ const DebtTable = ({
   const [confirmMessage, setConfirmMessage] = useState("");
   const [actionToConfirm, setActionToConfirm] = useState(() => () => {});
 
+  // The summary calculations (totalDebts, totalDebtAmount, etc.) are still here
+  // but are not being passed to or rendered by the DebtSummary component anymore.
   const totalDebts = debts.length;
   const totalDebtAmount = debts.reduce(
     (sum, debt) => sum + debt.totalAmount,
@@ -41,6 +43,8 @@ const DebtTable = ({
 
   return (
     <>
+      {/* Removed: Title and 'Record New Debt' button
+      
       <div className="flex flex-col sm:flex-row justify-between items-center space-y-2 mb-8">
         <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">
           Debt Records
@@ -52,13 +56,16 @@ const DebtTable = ({
           Record New Debt
         </button>
       </div>
+      */}
 
-      <DebtSummary
+      {/* Removed: DebtSummary component */}
+      {/* <DebtSummary
         totalDebts={totalDebts}
         totalDebtAmount={totalDebtAmount}
         totalOverdueAmount={totalOverdueAmount}
         totalItems={totalItems}
       />
+      */}
 
       <div className="flex flex-col gap-2 sm:gap-0 sm:flex-row justify-center sm:justify-start mb-6 sm:space-x-4">
         <button
