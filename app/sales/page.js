@@ -293,7 +293,7 @@ const SalesPage = () => {
               className="px-4 py-2 border rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
             />
           </div>
-          <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
+          <div className="flex flex-wrap gap-1 sm:gap-2 mt-4 sm:mt-0">
             {["daily", "weekly", "monthly", "yearly"].map((p) => (
               <button
                 key={p}

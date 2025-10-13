@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { addDoc, collection, doc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, doc, updateDoc, getDoc } from "firebase/firestore";
 import { Package, X } from "lucide-react";
 import { query, onSnapshot } from "firebase/firestore";
 import PageLoader from "@/app/components/PageLoader";
@@ -13,7 +13,8 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
     quantity: "",
   });
   const [stockItems, setStockItems] = useState([]);
-  const [loading, setLoading] = useState(true); // Set initial loading state for data fetch
+  const [isFetchingStock, setIsFetchingStock] = useState(true); // 1. NEW STATE for initial data fetch
+  const [isLoading, setIsLoading] = useState(false); // Renamed state for form submission
   const [message, setMessage] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -22,7 +23,7 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
   useEffect(() => {
     if (!userId || !isOpen) return;
 
-    setLoading(true);
+    setIsFetchingStock(true); // 2. Use new state
     const q = query(collection(db, `users/${userId}/items`));
     const unsubscribe = onSnapshot(
       q,
@@ -32,12 +33,12 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
           ...doc.data(),
         }));
         setStockItems(items);
-        setLoading(false);
+        setIsFetchingStock(false); // 2. Use new state
       },
       (error) => {
         console.error("Error fetching stock items: ", error);
         setMessage("Failed to fetch stock items. Please try again.");
-        setLoading(false);
+        setIsFetchingStock(false); // 2. Use new state
       }
     );
 
@@ -105,18 +106,18 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setIsLoading(true); // Use new state for form submission
     setMessage("");
 
     if (!userId) {
       setMessage("User not authenticated. Please wait and try again.");
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
 
     if (!formData.itemId || !formData.quantity) {
       setMessage("Please select an item and enter a quantity.");
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
 
@@ -124,7 +125,7 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
 
     if (!selectedItem) {
       setMessage("Selected item not found in stock.");
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
 
@@ -134,6 +135,40 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
     const profit = totalRevenue - totalCost;
 
     try {
+      // --- Inventory Update Logic Start ---
+      const itemRef = doc(db, `users/${userId}/items`, selectedItem.id);
+
+      const itemSnap = await getDoc(itemRef);
+      const currentItemData = itemSnap.data();
+
+      let stockAdjustment = 0;
+
+      if (initialData && initialData.id) {
+        // EDITING an existing sale
+        const oldQuantity = Number(initialData.quantity) || 0;
+        stockAdjustment = oldQuantity - quantity;
+      } else {
+        // RECORDING a NEW sale
+        stockAdjustment = -quantity;
+      }
+
+      const newStockQuantity =
+        (currentItemData.quantity || 0) + stockAdjustment;
+
+      if (newStockQuantity < 0) {
+        setMessage(`Not enough stock. Only ${currentItemData.quantity} left.`);
+        setIsLoading(false);
+        return;
+      }
+
+      // Update the item's stock quantity
+      await updateDoc(itemRef, {
+        quantity: newStockQuantity,
+      });
+
+      // --- Inventory Update Logic End ---
+
+      // --- Sales Record Save Logic ---
       const salesData = {
         itemId: selectedItem.id,
         itemName: selectedItem.name,
@@ -155,6 +190,7 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
         await addDoc(collection(db, `users/${userId}/sales`), salesData);
         setMessage("Sale recorded successfully!");
       }
+
       setTimeout(() => {
         onClose();
       }, 1500);
@@ -162,7 +198,7 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
       console.error("Error saving sale: ", error);
       setMessage("Failed to save sale. Please check the console for details.");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -170,7 +206,8 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
     item.name.toLowerCase().includes(formData.itemName.toLowerCase())
   );
 
-  if (loading) {
+  // 3. Conditional rendering check
+  if (isFetchingStock) {
     return <PageLoader />;
   }
 
@@ -189,7 +226,7 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
           <button
             className="text-gray-400 hover:text-gray-600"
             onClick={onClose}
-            disabled={loading}
+            disabled={isLoading}
           >
             <X size={24} />
           </button>
@@ -257,10 +294,15 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
               placeholder="e.g., 2"
               required
+              min="1"
             />
           </div>
           {message && (
-            <p className="mt-2 text-center text-sm font-medium text-green-600">
+            <p
+              className={`mt-2 text-center text-sm font-medium ${
+                message.includes("success") ? "text-green-600" : "text-red-600"
+              }`}
+            >
               {message}
             </p>
           )}
@@ -269,16 +311,16 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
               type="button"
               onClick={onClose}
               className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:ring-offset-2"
-              disabled={loading}
+              disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={isLoading}
               className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              {loading
+              {isLoading
                 ? "Saving..."
                 : initialData
                 ? "Update Sale"
