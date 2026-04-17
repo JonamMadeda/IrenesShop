@@ -1,9 +1,9 @@
 "use client";
 import React, { useState } from "react";
 import { ShoppingBag, Loader, Search, AlertTriangle } from "lucide-react"; // Added AlertTriangle
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+// Firebase imports removed
 
-const AddItem = ({ onClose, showAlert, categories, db, userId }) => {
+const AddItem = ({ onClose, showAlert, categories, supabase, userId, onItemAdded }) => {
   const [itemName, setItemName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [category, setCategory] = useState("");
@@ -37,15 +37,18 @@ const AddItem = ({ onClose, showAlert, categories, db, userId }) => {
 
     setLoading(true);
     try {
-      await addDoc(collection(db, "users", userId, "items"), {
+      const { error } = await supabase.from("items").insert({
         name: itemName,
         quantity: Number(quantity),
-        category, // Use the final selected category name
-        buyingPrice: Number(buyingPrice),
-        sellingPrice: Number(sellingPrice),
-        createdAt: serverTimestamp(),
+        category,
+        cost: Number(buyingPrice),
+        price: Number(sellingPrice),
+        user_id: userId,
+        created_at: new Date(),
       });
+      if (error) throw error;
       showAlert(`Item "${itemName}" added!`, "Success!");
+      if (onItemAdded) onItemAdded();
       // Reset states
       setItemName("");
       setQuantity("");

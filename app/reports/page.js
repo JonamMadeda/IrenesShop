@@ -13,16 +13,8 @@ import {
   AlertCircle,
   Calendar as CalendarIcon,
 } from "lucide-react";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  orderBy,
-  doc,
-} from "firebase/firestore";
-import { db, auth } from "@/firebase/firebase.client";
-import { onAuthStateChanged } from "firebase/auth";
+import { createClient } from "@/utils/supabase/client";
+import { getShopContext } from "@/utils/supabase/getShopContext";
 import { Chart as ChartJS, registerables } from "chart.js";
 import {
   format,
@@ -129,6 +121,7 @@ const TopItems = ({ items, limit = 5 }) => (
 
 // Main Reports Page Component
 export default function Reports() {
+  const supabase = createClient();
   const [userId, setUserId] = useState(null);
   // 💡 CHANGED: Default period to 'monthly'
   const [period, setPeriod] = useState("monthly");
@@ -159,44 +152,19 @@ export default function Reports() {
 
   // Fetch user and data
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.log("No authenticated user found. Redirecting.");
         window.location.href = "/";
         return;
       }
 
-      const userDocRef = doc(db, "users", user.uid);
-      const unsubscribeUser = onSnapshot(
-        userDocRef,
-        (docSnap) => {
-          const userData = docSnap.data();
-          if (
-            docSnap.exists() &&
-            userData?.subscriptionStatus === "active" &&
-            userData?.expiresAt.toDate() > new Date()
-          ) {
-            setUserId(user.uid);
-            setIsLoading(false);
-          } else {
-            console.log(
-              "Subscription is inactive or expired. Redirecting to root."
-            );
-            window.location.href = "/";
-          }
-        },
-        (err) => {
-          console.error("Error fetching user data:", err);
-          setError("Failed to verify subscription.");
-          window.location.href = "/";
-        }
-      );
+      setUserId(user.id);
+      setIsLoading(false);
+    };
 
-      return () => unsubscribeUser();
-    });
-
-    return () => unsubscribeAuth();
-  }, []);
+    checkUser();
+  }, [supabase]);
 
   useEffect(() => {
     if (!userId) {
@@ -204,77 +172,97 @@ export default function Reports() {
       return;
     }
 
-    const fetchSalesAndDebtData = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       setError(null);
       try {
         const { start, end } = dateRange;
-        // Fetch sales data
-        const salesQuery = query(
-          collection(db, "users", userId, "sales"),
-          where("saleDate", ">=", start),
-          where("saleDate", "<=", end),
-          orderBy("saleDate", "desc")
-        );
-        const unsubscribeSales = onSnapshot(salesQuery, (snapshot) => {
-          const sales = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            saleDate: doc.data().saleDate?.toDate(),
-          }));
 
-          const itemGroups = sales
-            .reduce((acc, sale) => {
-              const existing = acc.find((i) => i.itemId === sale.itemId);
-              if (existing) {
-                existing.totalQuantity += sale.quantity;
-                existing.totalRevenue += sale.totalRevenue || 0;
-              } else {
-                acc.push({
-                  itemId: sale.itemId,
-                  itemName: sale.itemName,
-                  category: sale.itemCategory || "Uncategorized",
-                  totalQuantity: sale.quantity,
-                  totalRevenue: sale.totalRevenue || 0,
-                });
-              }
-              return acc;
-            }, [])
-            .sort((a, b) => b.totalQuantity - a.totalQuantity);
+        // Fetch sales
+        const { data: salesDataRaw, error: salesError } = await supabase
+          .from("sales")
+          .select("*")
+          .eq("user_id", userId)
+          .gte("sale_date", start.toISOString())
+          .lte("sale_date", end.toISOString())
+          .order("sale_date", { ascending: false });
 
-          setSalesData(sales);
-          setTopItems(itemGroups);
-        });
+        if (salesError) throw salesError;
 
-        // Fetch debt data
-        const debtQuery = query(
-          collection(db, "users", userId, "debts"),
-          where("createdAt", ">=", start),
-          where("createdAt", "<=", end)
-        );
-        const unsubscribeDebt = onSnapshot(debtQuery, (snapshot) => {
-          const debts = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-          }));
-          setDebtData(debts);
-        });
+        const sales = salesDataRaw.map(s => ({
+          ...s,
+          itemId: s.item_id || s.itemId,
+          saleDate: new Date(s.sale_date || s.saleDate),
+          itemName: s.item_name || s.itemName,
+          totalRevenue: s.total_revenue || s.totalRevenue,
+          totalCost: s.total_cost || s.totalCost,
+          itemCategory: s.item_category || s.itemCategory,
+        }));
 
-        setIsLoading(false);
-        return () => {
-          unsubscribeSales();
-          unsubscribeDebt();
-        };
+        const itemGroups = sales
+          .reduce((acc, sale) => {
+            const existing = acc.find((i) => i.itemId === sale.itemId);
+            if (existing) {
+              existing.totalQuantity += sale.quantity;
+              existing.totalRevenue += sale.totalRevenue || 0;
+            } else {
+              acc.push({
+                itemId: sale.itemId,
+                itemName: sale.itemName,
+                category: sale.itemCategory || "Uncategorized",
+                totalQuantity: sale.quantity,
+                totalRevenue: sale.totalRevenue || 0,
+              });
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => b.totalQuantity - a.totalQuantity);
+
+        setSalesData(sales);
+        setTopItems(itemGroups);
+
+        // Fetch debts
+        const { data: debtsDataRaw, error: debtsError } = await supabase
+          .from("debts")
+          .select("*")
+          .eq("user_id", userId)
+          .gte("created_at", start.toISOString())
+          .lte("created_at", end.toISOString());
+
+        if (debtsError) throw debtsError;
+
+        setDebtData(debtsDataRaw.map(d => ({
+          ...d,
+          createdAt: new Date(d.created_at || d.createdAt),
+          totalAmount: d.total_amount || d.totalAmount,
+          customerFirstName: d.customer_first_name || d.customerFirstName,
+          customerPhone: d.customer_phone || d.customerPhone,
+          itemName: d.item_name || d.itemName,
+        })));
+
       } catch (error) {
         console.error("Error fetching data:", error);
         setError("Failed to load sales and debt data");
+      } finally {
         setIsLoading(false);
       }
     };
 
-    fetchSalesAndDebtData();
-  }, [userId, period, dateRange]);
+    fetchData();
+
+    const salesChannel = supabase.channel('reports_sales')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `user_id=eq.${userId}` }, () => fetchData())
+      .subscribe();
+    
+    const debtsChannel = supabase.channel('reports_debts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'debts', filter: `user_id=eq.${userId}` }, () => fetchData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(salesChannel);
+      supabase.removeChannel(debtsChannel);
+    };
+  }, [userId, period, dateRange, supabase]);
 
   // Combine sales and debt data into a single transactions array
   useEffect(() => {
@@ -356,8 +344,8 @@ export default function Reports() {
           `"${format(t.date || new Date(), "yyyy-MM-dd")}"`,
           `"${t.customerFirstName || "N/A"}"`,
           `"${t.itemName || "N/A"}"`,
-          t.quantity || "N/A",
-          t.amount,
+          t.quantity || t.itemQuantity || "N/A",
+          t.type === "Sale" ? t.totalRevenue : t.totalAmount,
         ].join(",")
       ),
     ].join("\n");

@@ -10,7 +10,7 @@ const SalesSummary = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {/* Total Sales Records Card */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
+      <div className="bg-blue-600 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
         <div>
           <div className="flex justify-between items-center mb-1">
             <p className="text-sm font-medium opacity-80">
@@ -26,7 +26,7 @@ const SalesSummary = ({
       </div>
 
       {/* Total Items Sold Card */}
-      <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
+      <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
         <div>
           <div className="flex justify-between items-center mb-1">
             <p className="text-sm font-medium opacity-80">Total Items Sold</p>
@@ -40,7 +40,7 @@ const SalesSummary = ({
       </div>
 
       {/* Total Revenue Card */}
-      <div className="bg-gradient-to-r from-gray-800 to-gray-900 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
+      <div className="bg-gray-800 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
         <div>
           <div className="flex justify-between items-center mb-1">
             <p className="text-sm font-medium opacity-80">Total Revenue</p>
@@ -56,7 +56,7 @@ const SalesSummary = ({
       </div>
 
       {/* Total Profit Card */}
-      <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
+      <div className="bg-green-600 text-white p-6 rounded-2xl shadow-lg flex flex-col justify-between">
         <div>
           <div className="flex justify-between items-center mb-1">
             <p className="text-sm font-medium opacity-80">Total Profit</p>

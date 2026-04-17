@@ -179,7 +179,7 @@ const DebtTable = ({
                         onClick={() => {
                           setShowConfirmModal(true);
                           setConfirmMessage(
-                            "Are you sure you want to permanently delete this debt record? This action cannot be undone."
+                            "Are you sure that you want to carry out this operation? You are about to permanently delete this debt record. This is a high-risk action, and deleted data cannot be recovered."
                           );
                           setActionToConfirm(() => () => handleDelete(debt.id));
                         }}

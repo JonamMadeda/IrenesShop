@@ -1,22 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-} from "firebase/firestore";
-import {
-  onAuthStateChanged,
-  signInAnonymously,
-  signInWithCustomToken,
-} from "firebase/auth";
-
-import { db, auth } from "@/firebase/firebase.client.js";
+import { createClient } from "@/utils/supabase/client";
+import { getShopContext } from "@/utils/supabase/getShopContext";
 
 import DebtTable from "./_components/DebtTable";
 import DebtForm from "./_components/DebtForm";
@@ -26,11 +12,10 @@ import DebtSummary from "./_components/DebtSummary";
 import DebtHeader from "./_components/DebtHeader";
 import DateFilter from "./_components/DateFilter";
 
-// Global variables provided by the environment
-const initialAuthToken =
-  typeof __initial_auth_token !== "undefined" ? __initial_auth_token : null;
+// appId and initialAuthToken logic removed for Supabase migration
 
 const DebtTracker = () => {
+  const supabase = createClient();
   // State variables
   const [customerFirstName, setCustomerFirstName] = useState("");
   const [customerLastName, setCustomerLastName] = useState("");
@@ -55,6 +40,7 @@ const DebtTracker = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState(() => () => {});
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -65,122 +51,96 @@ const DebtTracker = () => {
   );
   const [activeRange, setActiveRange] = useState("Monthly"); // Default to 'Monthly'
 
+  const refreshDebts = () => {
+    setRefreshTick((current) => current + 1);
+  };
+
   // 🔒 Subscription check and authentication
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     setDateTaken(today);
-    // Setting initial date state on mount
     setSelectedDate(today);
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        try {
-          if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (error) {
-          console.error("Failed to sign in:", error);
-          window.location.href = "/";
-          return;
-        }
-      }
-
-      const currentUser = user || auth.currentUser;
-      if (!currentUser) {
-        console.log("No authenticated user found. Redirecting.");
         window.location.href = "/";
         return;
       }
 
-      const userDocRef = doc(db, "users", currentUser.uid);
-      const unsubscribeUser = onSnapshot(
-        userDocRef,
-        (docSnap) => {
-          if (!docSnap.exists()) {
-            console.log("User record not found. Redirecting.");
-            window.location.href = "/";
-            return;
-          }
+      const { queryId } = await getShopContext(user.id);
+      setUserId(queryId);
+      setIsAuthReady(true);
+      setIsPageLoading(false);
+    };
 
-          const userData = docSnap.data();
-          if (
-            userData?.subscriptionStatus === "active" &&
-            userData?.expiresAt?.toDate() > new Date()
-          ) {
-            setUserId(currentUser.uid);
-            setIsAuthReady(true);
-            setIsPageLoading(false);
-          } else {
-            console.log("Subscription expired or inactive. Redirecting.");
-            window.location.href = "/";
-          }
-        },
-        (err) => {
-          console.error("Error checking subscription:", err);
-          window.location.href = "/";
-        }
-      );
-
-      return () => unsubscribeUser();
-    });
-
-    return () => unsubscribeAuth();
-  }, []);
+    checkUser();
+  }, [supabase]);
 
   // 🧾 Real-time listener for debts and items
   useEffect(() => {
     if (isAuthReady && userId) {
-      const debtCollectionRef = collection(db, `users/${userId}/debts`);
-      const itemsCollectionRef = collection(db, `users/${userId}/items`);
-
-      const unsubscribeDebts = onSnapshot(
-        debtCollectionRef,
-        (snapshot) => {
-          const debtList = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              ...data,
-              // Convert Firestore Timestamps to YYYY-MM-DD strings for form inputs
-              dateTaken: data.dateTaken.toDate().toISOString().slice(0, 10),
-              returnDate: data.returnDate.toDate().toISOString().slice(0, 10),
-            };
-          });
-          setDebts(
-            debtList.sort(
-              (a, b) => new Date(b.dateTaken) - new Date(a.dateTaken)
-            )
-          );
-        },
-        (error) => {
-          console.error("Error fetching debts:", error);
+      const fetchDebtsAndItems = async () => {
+        const { data: debtsData, error: debtsError } = await supabase
+          .from("debts")
+          .select("*")
+          .eq("user_id", userId)
+          .order("date_taken", { ascending: false });
+        
+        if (debtsError) {
+          console.error("Error fetching debts:", debtsError);
           showStatus("error", "Failed to load debt records.");
+        } else {
+          setDebts((debtsData || []).map(debt => ({
+            ...debt,
+            customerFirstName: debt.customer_first_name || debt.customerFirstName,
+            customerLastName: debt.customer_last_name || debt.customerLastName,
+            phoneNumber: debt.customer_phone || debt.phoneNumber,
+            itemName: debt.item_name || debt.itemName,
+            itemQuantity: debt.item_quantity || debt.itemQuantity,
+            itemPrice: debt.total_amount && debt.item_quantity
+              ? Number(debt.total_amount) / Number(debt.item_quantity)
+              : debt.itemPrice,
+            totalAmount: debt.total_amount || debt.totalAmount,
+            dateTaken: debt.date_taken || debt.dateTaken,
+            returnDate: debt.return_date || debt.returnDate,
+            isPaid: debt.status === "paid" || debt.isPaid,
+          })));
         }
-      );
 
-      const unsubscribeItems = onSnapshot(
-        itemsCollectionRef,
-        (snapshot) => {
-          const itemsList = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setItems(itemsList);
-        },
-        (error) => {
-          console.error("Error fetching items:", error);
+        const { data: itemsData, error: itemsError } = await supabase
+          .from("items")
+          .select("*")
+          .eq("user_id", userId);
+        
+        if (itemsError) {
+          console.error("Error fetching items:", itemsError);
           showStatus("error", "Failed to load item list.");
+        } else {
+          setItems((itemsData || []).map(item => ({
+            ...item,
+            buyingPrice: item.cost ?? item.buyingPrice,
+            sellingPrice: item.price ?? item.sellingPrice,
+          })));
         }
-      );
+      };
+
+      fetchDebtsAndItems();
+
+      const debtsChannel = supabase.channel('debts_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'debts', filter: `user_id=eq.${userId}` }, () => fetchDebtsAndItems())
+        .subscribe();
+      
+      const itemsChannel = supabase.channel('items_changes_debt')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `user_id=eq.${userId}` }, () => fetchDebtsAndItems())
+        .subscribe();
 
       return () => {
-        unsubscribeDebts();
-        unsubscribeItems();
+        supabase.removeChannel(debtsChannel);
+        supabase.removeChannel(itemsChannel);
       };
     }
-  }, [isAuthReady, userId]);
+  }, [isAuthReady, userId, supabase, refreshTick]);
 
   // Utility: show status messages
   const showStatus = (type, message) => {
@@ -250,40 +210,39 @@ const DebtTracker = () => {
 
     // Base object for record (without server timestamp)
     let debtData = {
-      customerFirstName,
-      customerLastName,
-      phoneNumber,
-      itemName,
-      itemQuantity: Number(itemQuantity),
-      itemPrice: Number(itemPrice),
-      totalAmount,
-      dateTaken: new Date(dateTaken),
-      returnDate: new Date(returnDate),
-      isPaid: false,
+      customer_first_name: customerFirstName,
+      customer_last_name: customerLastName,
+      customer_phone: phoneNumber,
+      item_name: itemName,
+      item_quantity: Number(itemQuantity),
+      total_amount: totalAmount,
+      date_taken: new Date(dateTaken),
+      return_date: new Date(returnDate),
+      status: "unpaid",
     };
 
     try {
-      const debtCollectionRef = collection(db, `users/${userId}/debts`);
-
-      // 🔄 EDITING: Execute update only if currentRecord exists AND has a valid ID.
       if (currentRecord && currentRecord.id) {
-        const docRef = doc(db, debtCollectionRef.path, currentRecord.id);
-
-        // Use debtData for the update (avoids setting a new createdAt timestamp)
-        await updateDoc(docRef, debtData);
-
+        const { error } = await supabase
+          .from("debts")
+          .update(debtData)
+          .eq("id", currentRecord.id)
+          .eq("user_id", userId);
+        
+        if (error) throw error;
         showStatus("success", "Debt record updated successfully!");
-      }
-      // ➕ ADDING NEW RECORD: Execute if currentRecord is null or doesn't have an ID.
-      else {
-        // Only set createdAt for new records
-        const newDebtRecord = {
-          ...debtData,
-          createdAt: serverTimestamp(),
-        };
-        await addDoc(debtCollectionRef, newDebtRecord);
+      } else {
+        const { error } = await supabase
+          .from("debts")
+          .insert({
+            ...debtData,
+            user_id: userId,
+            created_at: new Date(),
+          });
+        if (error) throw error;
         showStatus("success", "Debt record saved successfully!");
       }
+      refreshDebts();
       closePopup();
     } catch (error) {
       console.error("Error saving debt record:", error);
@@ -296,15 +255,20 @@ const DebtTracker = () => {
   // 🗑️ Delete & Paid toggle
   const handleDelete = (id) => {
     setConfirmMessage(
-      "Are you sure you want to delete this debt record? This action cannot be undone."
+      "Are you sure that you want to carry out this operation? You are about to permanently delete this debt record. This is a high-risk action, and deleted data cannot be recovered."
     );
     setConfirmAction(() => async () => {
       setShowConfirmModal(false);
       setIsLoading(true);
       try {
-        const docRef = doc(db, `users/${userId}/debts`, id);
-        await deleteDoc(docRef);
+        const { error } = await supabase
+          .from("debts")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+        if (error) throw error;
         showStatus("success", "Debt record deleted successfully!");
+        refreshDebts();
       } catch (error) {
         console.error("Error deleting debt record:", error);
         showStatus("error", "Failed to delete debt record.");
@@ -322,9 +286,15 @@ const DebtTracker = () => {
         setShowConfirmModal(false);
         setIsLoading(true);
         try {
-          const docRef = doc(db, `users/${userId}/debts`, debt.id);
-          await updateDoc(docRef, { isPaid: false });
+          const { error } = await supabase
+            .from("debts")
+            .update({ status: "unpaid" })
+            .eq("id", debt.id)
+            .eq("user_id", userId);
+          
+          if (error) throw error;
           showStatus("success", "Debt marked as unpaid.");
+          refreshDebts();
         } catch (error) {
           console.error("Error updating paid status:", error);
           showStatus("error", "Failed to update debt status.");
@@ -340,15 +310,35 @@ const DebtTracker = () => {
         setShowConfirmModal(false);
         setIsLoading(true);
         try {
-          const salesCollectionRef = collection(db, `users/${userId}/sales`);
-          // We include the existing debt fields and add the paidAt timestamp
-          const salesRecord = { ...debt, paidAt: serverTimestamp() };
-          await addDoc(salesCollectionRef, salesRecord);
+          const matchedItem = items.find((item) => item.name === debt.itemName);
+          const unitCost = Number(matchedItem?.cost ?? matchedItem?.buyingPrice ?? 0);
+          const itemCategory = matchedItem?.category || "Uncategorized";
 
-          const debtDocRef = doc(db, `users/${userId}/debts`, debt.id);
-          await deleteDoc(debtDocRef);
+          // Move to sales
+          const salesRecord = { 
+            item_id: matchedItem?.id || "",
+            item_name: debt.itemName,
+            total_revenue: debt.totalAmount,
+            total_cost: unitCost * debt.itemQuantity,
+            profit: debt.totalAmount - (unitCost * debt.itemQuantity),
+            quantity: debt.itemQuantity,
+            sale_date: new Date(),
+            item_category: itemCategory,
+            user_id: userId,
+          };
+          
+          const { error: saleError } = await supabase.from("sales").insert(salesRecord);
+          if (saleError) throw saleError;
+
+          const { error: debtError } = await supabase
+            .from("debts")
+            .delete()
+            .eq("id", debt.id)
+            .eq("user_id", userId);
+          if (debtError) throw debtError;
 
           showStatus("success", "Debt paid and moved to sales successfully!");
+          refreshDebts();
         } catch (error) {
           console.error("Error marking debt as paid:", error);
           showStatus("error", "Failed to mark debt as paid.");

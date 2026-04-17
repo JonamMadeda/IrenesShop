@@ -1,1 +1,104 @@
 @import "tailwindcss";
+
+:root {
+  --color-primary: #ffffff;
+  --color-secondary: #000075;
+  --color-secondary-hover: #000099;
+  --color-secondary-soft: #f2f4ff;
+  --color-secondary-soft-border: #cfd5ff;
+}
+
+html,
+body {
+  background-color: var(--color-primary);
+  color: var(--color-secondary);
+}
+
+.bg-slate-100,
+.bg-gray-50 {
+  background-color: var(--color-primary) !important;
+}
+
+.bg-slate-900,
+.bg-gray-700,
+.bg-gray-800,
+.bg-gray-900,
+.bg-blue-500,
+.bg-blue-600,
+.bg-blue-700,
+.bg-blue-800 {
+  background-color: var(--color-secondary) !important;
+}
+
+.text-blue-500,
+.text-blue-600,
+.text-blue-700,
+.text-blue-800,
+.text-blue-900,
+.text-slate-900 {
+  color: var(--color-secondary) !important;
+}
+
+.border-blue-100,
+.border-blue-200,
+.border-blue-500,
+.border-blue-700 {
+  border-color: var(--color-secondary-soft-border) !important;
+}
+
+.bg-blue-50,
+.bg-blue-100 {
+  background-color: var(--color-secondary-soft) !important;
+}
+
+.from-blue-500,
+.from-blue-600,
+.to-blue-600 {
+  --tw-gradient-from: var(--color-secondary) !important;
+  --tw-gradient-to: rgb(0 0 26 / 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.to-blue-600,
+.to-blue-700,
+.to-purple-600,
+.to-gray-900 {
+  --tw-gradient-to: var(--color-secondary-hover) !important;
+}
+
+.from-purple-500,
+.from-gray-800 {
+  --tw-gradient-from: var(--color-secondary) !important;
+  --tw-gradient-to: rgb(0 0 26 / 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.hover\:bg-blue-700:hover,
+.hover\:bg-blue-800:hover,
+.hover\:bg-gray-800:hover,
+.hover\:bg-gray-900:hover {
+  background-color: var(--color-secondary-hover) !important;
+}
+
+.hover\:bg-blue-100:hover {
+  background-color: var(--color-secondary-soft) !important;
+}
+
+.hover\:text-blue-600:hover,
+.hover\:text-blue-900:hover,
+.hover\:text-slate-900:hover {
+  color: var(--color-secondary) !important;
+}
+
+.focus\:border-blue-500:focus,
+.focus\:ring-blue-500:focus,
+.focus\:ring-blue-700:focus,
+.focus\:ring-blue-300:focus,
+.focus\:ring-purple-300:focus {
+  --tw-ring-color: rgb(0 0 26 / 0.18) !important;
+  border-color: var(--color-secondary) !important;
+}
+
+.focus\:border-transparent:focus {
+  border-color: transparent !important;
+}

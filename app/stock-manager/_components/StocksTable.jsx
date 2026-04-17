@@ -1,19 +1,11 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  collection,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy,
-} from "firebase/firestore";
-import { db } from "@/firebase/firebase.client";
+import { createClient } from "@/utils/supabase/client";
 import PageLoader from "@/app/components/PageLoader";
 
-const StocksTable = ({ user, categories }) => {
+const StocksTable = ({ user, categories, role }) => {
+  const supabase = createClient();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -31,28 +23,41 @@ const StocksTable = ({ user, categories }) => {
   useEffect(() => {
     if (!user) return;
 
-    const itemsCollectionRef = collection(db, "users", user.uid, "items");
-    const q = query(itemsCollectionRef, orderBy("name"));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedItems = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setItems(fetchedItems);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Error fetching items:", err);
+    const fetchItems = async () => {
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .eq("user_id", user.queryId || user.id)
+        .order("name");
+      
+      if (error) {
+        console.error("Error fetching items:", error);
         setError("Failed to fetch inventory items.");
-        setLoading(false);
+      } else {
+        setItems((data || []).map(item => ({
+          ...item,
+          buyingPrice: item.cost ?? item.buyingPrice,
+          sellingPrice: item.price ?? item.sellingPrice,
+        })));
       }
-    );
+      setLoading(false);
+    };
 
-    return () => unsubscribe();
-  }, [user]);
+    fetchItems();
+
+    const channel = supabase
+      .channel('items_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'items', filter: `user_id=eq.${user.queryId || user.id}` },
+        () => fetchItems()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, supabase]);
 
   // Handle success message visibility
   useEffect(() => {
@@ -93,20 +98,30 @@ const StocksTable = ({ user, categories }) => {
 
   const handleUpdateSubmit = async (e) => {
     e.preventDefault();
-    if (!db || !user || !currentItemToEdit) return;
+    if (!user || !currentItemToEdit) return;
 
     const { id, ...updatedItem } = currentItemToEdit;
     setIsUpdateModalOpen(false);
     setIsActionInProgress(true);
 
     try {
-      const itemDocRef = doc(db, "users", user.uid, "items", id);
-      await updateDoc(itemDocRef, updatedItem);
+      const { error } = await supabase
+        .from("items")
+        .update({
+          name: updatedItem.name,
+          category: updatedItem.category,
+          quantity: Number(updatedItem.quantity),
+          cost: Number(updatedItem.buyingPrice),
+          price: Number(updatedItem.sellingPrice),
+        })
+        .eq("id", id)
+        .eq("user_id", user.queryId || user.id);
+      
+      if (error) throw error;
       setCurrentItemToEdit(null);
       setSuccessMessage("Item updated successfully!");
     } catch (err) {
       console.error("Error updating item:", err);
-      // Implement a user-facing error message here
     } finally {
       setIsActionInProgress(false);
     }
@@ -123,19 +138,23 @@ const StocksTable = ({ user, categories }) => {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!db || !user || !itemToDelete) return;
+    if (!user || !itemToDelete) return;
 
     setIsDeleteModalOpen(false);
     setIsActionInProgress(true);
 
     try {
-      const itemDocRef = doc(db, "users", user.uid, "items", itemToDelete.id);
-      await deleteDoc(itemDocRef);
+      const { error } = await supabase
+        .from("items")
+        .delete()
+        .eq("id", itemToDelete.id)
+        .eq("user_id", user.queryId || user.id);
+      
+      if (error) throw error;
       setItemToDelete(null);
       setSuccessMessage("Item deleted successfully!");
     } catch (err) {
       console.error("Error deleting item:", err);
-      // Implement a user-facing error message here
     } finally {
       setIsActionInProgress(false);
     }
@@ -242,12 +261,14 @@ const StocksTable = ({ user, categories }) => {
                         >
                           Edit
                         </button>
-                        <button
-                          onClick={() => onDelete(item)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
+                        {(role === 'admin' || role === 'shop_owner') && (
+                          <button
+                            onClick={() => onDelete(item)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -310,7 +331,7 @@ const StocksTable = ({ user, categories }) => {
                         name: e.target.value,
                       })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-sans px-3 py-2 border rounded-xl"
+                    className="mt-1 block w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500 font-sans"
                   />
                 </div>
                 <div>
@@ -329,7 +350,7 @@ const StocksTable = ({ user, categories }) => {
                         category: e.target.value,
                       })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-sans px-3 py-2 border rounded-xl"
+                    className="mt-1 block w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500 font-sans"
                   >
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.name}>
@@ -355,7 +376,7 @@ const StocksTable = ({ user, categories }) => {
                         quantity: Number(e.target.value),
                       })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-sans px-3 py-2 border rounded-xl"
+                    className="mt-1 block w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500 font-sans"
                   />
                 </div>
                 <div>
@@ -376,7 +397,7 @@ const StocksTable = ({ user, categories }) => {
                         buyingPrice: Number(e.target.value),
                       })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-sans px-3 py-2 border rounded-xl"
+                    className="mt-1 block w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500 font-sans"
                   />
                 </div>
                 <div>
@@ -397,7 +418,7 @@ const StocksTable = ({ user, categories }) => {
                         sellingPrice: Number(e.target.value),
                       })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-sans px-3 py-2 border rounded-xl"
+                    className="mt-1 block w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500 font-sans"
                   />
                 </div>
               </div>
@@ -427,9 +448,10 @@ const StocksTable = ({ user, categories }) => {
           <div className="relative bg-white rounded-lg shadow-xl p-8 w-full max-w-sm mx-4 text-center">
             <h3 className="text-xl font-bold mb-4">Confirm Deletion</h3>
             <p className="text-gray-700 mb-6">
-              Are you sure you want to delete{" "}
-              <span className="font-semibold">{itemToDelete.name}</span>? This
-              action cannot be undone.
+              Are you sure that you want to carry out this operation? You are
+              about to permanently delete{" "}
+              <span className="font-semibold">{itemToDelete.name}</span>. This
+              is a high-risk action, and the deleted record cannot be recovered.
             </p>
             <div className="flex justify-center gap-4">
               <button
@@ -444,7 +466,7 @@ const StocksTable = ({ user, categories }) => {
                 onClick={handleDeleteConfirm}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700"
               >
-                Delete
+                Confirm Deletion
               </button>
             </div>
           </div>

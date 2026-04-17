@@ -12,16 +12,8 @@ import {
   startOfYear,
   endOfYear,
 } from "date-fns";
-import {
-  collection,
-  query,
-  onSnapshot,
-  doc,
-  deleteDoc,
-  where,
-  orderBy,
-} from "firebase/firestore";
-import { signInWithCustomToken, signInAnonymously } from "firebase/auth";
+import { createClient } from "@/utils/supabase/client";
+import { getShopContext } from "@/utils/supabase/getShopContext";
 import {
   ChevronLeft,
   ChevronRight,
@@ -34,12 +26,8 @@ import ConfirmModal from "./_components/ConfirmModal";
 import SalesTable from "./_components/SalesTable";
 import SalesSummary from "./_components/SalesSummary";
 import PageLoader from "@/app/components/PageLoader";
-import { db, auth } from "@/firebase/firebase.client.js";
 
-// The __firebase_config and __initial_auth_token are provided globally by the Canvas environment.
-const initialAuthToken =
-  typeof __initial_auth_token !== "undefined" ? __initial_auth_token : null;
-const appId = typeof __app_id !== "undefined" ? __app_id : "default-app-id";
+// appId and initialAuthToken logic removed for Supabase migration
 
 // Helper function to safely extract a numeric value
 const getNumericValue = (value) => {
@@ -65,6 +53,7 @@ const getDateRange = (period, customDate) => {
 };
 
 const SalesPage = () => {
+  const supabase = createClient();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -79,73 +68,78 @@ const SalesPage = () => {
 
   // New state for success message
   const [successMessage, setSuccessMessage] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Define Firebase collection paths
-  // This makes the path configurable and easier to manage in one place.
-  const salesCollectionPath = `users/${userId}/sales`;
+  const refreshSales = () => {
+    setRefreshTick((current) => current + 1);
+  };
 
   // Authentication Effect
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-      if (!user) {
-        try {
-          if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (err) {
-          console.error("Authentication failed:", err);
-          setError("Authentication failed. Please refresh the page.");
-        }
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { queryId } = await getShopContext(user.id);
+        setUserId(queryId);
+      } else {
+        window.location.href = "/auth";
       }
-      if (auth.currentUser) {
-        setUserId(auth.currentUser.uid);
-      }
-    });
-    return () => unsubscribeAuth();
-  }, []);
+    };
+    checkUser();
+  }, [supabase]);
 
   // Fetch Sales Data Effect with date filtering
   useEffect(() => {
     if (!userId) return;
 
-    setLoading(true);
-    setError(null);
+    const fetchSales = async () => {
+      setLoading(true);
+      const { start, end } = getDateRange(period, currentDate);
 
-    const { start, end } = getDateRange(period, currentDate);
+      const { data, error } = await supabase
+        .from("sales")
+        .select("*")
+        .eq("user_id", userId)
+        .gte("sale_date", start.toISOString())
+        .lte("sale_date", end.toISOString())
+        .order("sale_date", { ascending: false });
 
-    const salesCollectionRef = collection(db, salesCollectionPath);
-    const q = query(
-      salesCollectionRef,
-      where("saleDate", ">=", start),
-      where("saleDate", "<=", end),
-      orderBy("saleDate", "desc")
-    );
-
-    const unsubscribeSnapshot = onSnapshot(
-      q,
-      (snapshot) => {
-        const salesData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          saleDate: doc.data().saleDate?.toDate(),
-        }));
-        setSales(salesData);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Error fetching sales: ", err);
+      if (error) {
+        console.error("Error fetching sales: ", error);
         setError("Failed to fetch sales. Please try again later.");
-        setLoading(false);
+      } else {
+        setSales(data.map(item => ({
+          ...item,
+          itemId: item.item_id || item.itemId,
+          saleDate: new Date(item.sale_date || item.saleDate), 
+          itemName: item.item_name || item.itemName,
+          itemCategory: item.item_category || item.itemCategory,
+          totalRevenue: item.total_revenue || item.totalRevenue,
+          totalCost: item.total_cost || item.totalCost,
+        })));
       }
-    );
-    return () => unsubscribeSnapshot();
-  }, [userId, period, currentDate, salesCollectionPath]);
+      setLoading(false);
+    };
+
+    fetchSales();
+
+    const channel = supabase
+      .channel('sales_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sales', filter: `user_id=eq.${userId}` },
+        () => fetchSales()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, period, currentDate, supabase, refreshTick]);
 
   // Handle period change
   const handlePeriodChange = (newPeriod) => {
@@ -214,21 +208,28 @@ const SalesPage = () => {
 
   const handleDeleteClick = (saleId) => {
     if (!userId) return;
-    setConfirmMessage("Are you sure you want to delete this sale record?");
+    setConfirmMessage(
+      "Are you sure that you want to carry out this operation? You are about to permanently delete this sale record. This is a high-risk action, and deleted data cannot be recovered."
+    );
     setConfirmAction(() => () => handleDelete(saleId));
     setIsConfirmOpen(true);
   };
 
   const handleDelete = async (saleId) => {
     try {
-      await deleteDoc(doc(db, salesCollectionPath, saleId));
+      const { error } = await supabase
+        .from("sales")
+        .delete()
+        .eq("id", saleId)
+        .eq("user_id", userId);
+      
+      if (error) throw error;
       setSuccessMessage("Sale record deleted successfully!");
       setTimeout(() => {
         setSuccessMessage(null);
-      }, 3000); // Hide after 3 seconds
+      }, 3000);
     } catch (err) {
       console.error("Error deleting sale:", err);
-      // We can't show alert, so we'll just log it
     } finally {
       setIsConfirmOpen(false);
       setConfirmAction(null);
@@ -348,9 +349,9 @@ const SalesPage = () => {
             isOpen={isModalOpen}
             onClose={handleCloseModal}
             userId={userId}
-            db={db}
-            appId={appId}
+            supabase={supabase}
             initialData={editingSale}
+            onSaleSaved={refreshSales}
           />
         )}
         {isConfirmOpen && (

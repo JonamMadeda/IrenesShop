@@ -1,5 +1,5 @@
 {
-  "name": "jonams-inventory",
+  "name": "irenesshop",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,11 +10,11 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.100.1",
     "axios": "^1.11.0",
     "chart.js": "^4.5.0",
     "date-fns": "^4.1.0",
-    "firebase": "^12.2.1",
-    "firebase-admin": "^13.5.0",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.542.0",
     "next": "15.5.2",

@@ -1,140 +1,174 @@
 "use client";
-import React, { useState } from "react";
 
-/**
- * A responsive Navbar component that uses an array to dynamically render navigation links.
- * This approach makes the component more scalable and easier to maintain.
- */
-export default function Navbar({ isExpired = false }) {
-  // State to manage the visibility of the mobile menu.
-  const [isOpen, setIsOpen] = useState(false);
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import {
+  BarChart3,
+  ClipboardList,
+  CreditCard,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Package2,
+  ReceiptText,
+  ShieldUser,
+  X,
+} from "lucide-react";
 
-  // Array containing all the navigation links. Each object has a name and its href.
-  // This is the single source of truth for all links.
-  const allNavLinks = [
-    { name: "Dashboard", href: "/dashboard" },
-    { name: "Sales", href: "/sales" },
-    { name: "Debt", href: "/debt" },
-    { name: "Stock Manager", href: "/stock-manager" },
-    { name: "Reports", href: "/reports" },
-    { name: "Billing", href: "/billing" },
-    { name: "Account", href: "/account" },
-  ];
+import { createClient } from "@/utils/supabase/client";
+import { useShop } from "@/app/context/ShopContext";
 
-  // Function to toggle the mobile menu's open state.
-  const toggleMenu = () => {
-    setIsOpen(!isOpen);
+const navLinks = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Sales", href: "/sales", icon: CreditCard },
+  { name: "Debt", href: "/debt", icon: ReceiptText },
+  { name: "Stock Manager", href: "/stock-manager", icon: Package2 },
+  { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Account", href: "/account", icon: ShieldUser },
+  { name: "Categories", href: "/categories", icon: ClipboardList },
+];
+
+function NavItem({ href, icon: Icon, label, active, onClick }) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={[
+        "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-200",
+        active
+          ? "bg-blue-900 text-white"
+          : "text-slate-600 hover:bg-blue-50 hover:text-blue-900",
+      ].join(" ")}
+      aria-current={active ? "page" : undefined}
+    >
+      <Icon className="h-4.5 w-4.5 shrink-0" />
+      <span className="text-sm font-medium">{label}</span>
+    </Link>
+  );
+}
+
+export default function Navbar() {
+  const pathname = usePathname();
+  const { role } = useShop();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/auth";
   };
 
-  // Filter the links based on the subscription status
-  const navLinks = isExpired
-    ? [{ name: "Billing", href: "/billing" }]
-    : allNavLinks;
+  const roleColors = {
+    admin: "bg-purple-100 text-purple-700 border-purple-200",
+    shop_owner: "bg-blue-100 text-blue-700 border-blue-200",
+    staff: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    shop_attendant: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  };
+
+  const currentRoleColor = roleColors[role] || "bg-slate-100 text-slate-700 border-slate-200";
+
+  const filteredNavLinks = navLinks.filter((link) => {
+    // Hide Reports, Debt, and Categories for all users as requested
+    if (["/reports", "/debt", "/categories"].includes(link.href)) {
+      return false;
+    }
+    // Only admins/owners see Account
+    if (role !== "admin" && role !== "shop_owner" && link.href === "/account") {
+      return false;
+    }
+    return true;
+  });
 
   return (
-    // The main navigation container.
-    // ADDED: min-h-[10svh] to the main nav element for desktop/tablet view (md: prefix).
-    <nav className="bg-white border-b border-gray-300 p-4 shadow-md font-sans md:min-h-[10svh] md:flex md:items-center">
-      <div className="container mx-auto flex justify-between items-center">
-        {/* The brand or logo section, now a clickable link to the dashboard. */}
-        <a href="/dashboard" className="text-2xl font-bold">
-          Jonam
-        </a>
-
-        {/* The main navigation links, visible on medium screens and up. */}
-        <div className="hidden md:flex space-x-6">
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              className="text-gray-600 hover:text-blue-600 transition-colors"
-            >
-              {link.name}
-            </a>
-          ))}
-        </div>
-
-        {/* The hamburger icon for mobile view. */}
-        <div className="md:hidden">
-          <button
-            onClick={toggleMenu}
-            className="text-gray-600 hover:text-blue-600"
-          >
-            {isOpen ? (
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 6h16M4 12h16m-7 6h7"
-                />
-              </svg>
+    <>
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
+        <div className="flex h-16 items-center justify-between px-4">
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            <span className="text-lg font-bold tracking-tight text-slate-900">IRENESSHOP</span>
+            {role && (
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${currentRoleColor}`}>
+                {role.replace('_', ' ')}
+              </span>
             )}
-          </button>
-        </div>
-      </div>
+          </Link>
 
-      {/* The collapsible mobile menu. Full-screen overlay. */}
-      {isOpen && (
-        // Kept the mobile menu as full viewport height (h-screen)
-        <div className="md:hidden fixed inset-0 bg-white p-6 z-50 flex flex-col justify-center h-screen">
-          {/* Close button at the top right of the full-screen menu */}
           <button
-            onClick={toggleMenu}
-            className="absolute top-4 right-4 text-gray-600 hover:text-blue-600"
+            type="button"
+            onClick={() => setIsMobileMenuOpen((current) => !current)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-900"
+            aria-expanded={isMobileMenuOpen}
+            aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-
-          <div className="w-full space-y-3 flex flex-col justify-center items-center ">
-            {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                // Cleaned up the mobile link styling to remove the border-b
-                className="w-full text-center p-3 text-2xl font-semibold text-gray-800 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-colors"
-                onClick={toggleMenu} // Close menu on link click
-              >
-                {link.name}
-              </a>
-            ))}
-          </div>
         </div>
-      )}
-    </nav>
+
+        {isMobileMenuOpen && (
+          <div className="border-t border-slate-200 bg-white px-4 pb-4 pt-3">
+            <div className="space-y-2">
+              {filteredNavLinks.map((link) => (
+                <NavItem
+                  key={link.href}
+                  href={link.href}
+                  icon={link.icon}
+                  label={link.name}
+                  active={pathname === link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+              ))}
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-red-600 transition-colors duration-200 hover:bg-red-50"
+              >
+                <LogOut className="h-4.5 w-4.5 shrink-0" />
+                <span className="text-sm font-medium">Logout</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </header>
+
+      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 border-r border-slate-200 bg-white md:flex md:flex-col">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            <span className="text-lg font-bold tracking-tight text-slate-900">IRENESSHOP</span>
+            {role && (
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${currentRoleColor}`}>
+                {role.replace('_', ' ')}
+              </span>
+            )}
+          </Link>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <nav className="space-y-1.5">
+            {filteredNavLinks.map((link) => (
+              <NavItem
+                key={link.href}
+                href={link.href}
+                icon={link.icon}
+                label={link.name}
+                active={pathname === link.href}
+              />
+            ))}
+          </nav>
+        </div>
+
+        <div className="border-t border-slate-200 p-4">
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-red-600 transition-colors duration-200 hover:bg-red-50 hover:text-red-700"
+          >
+            <LogOut className="h-4.5 w-4.5 shrink-0" />
+            <span className="text-sm font-medium">Logout</span>
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

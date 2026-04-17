@@ -12,18 +12,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import { db, auth } from "@/firebase/firebase.client";
-import { onAuthStateChanged } from "firebase/auth";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  Timestamp,
-  doc,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { createClient } from "@/utils/supabase/client";
+import { getShopContext } from "@/utils/supabase/getShopContext";
 
 // Import the global PageLoader component
 import PageLoader from "@/app/components/PageLoader";
@@ -34,6 +24,7 @@ import PageLoader from "@/app/components/PageLoader";
  * The layout is split into two main sections for alerts and statistics.
  */
 export default function Dashboard() {
+  const supabase = createClient();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lowStockItems, setLowStockItems] = useState([]);
@@ -50,157 +41,104 @@ export default function Dashboard() {
   const itemsPerPage = 3;
 
   useEffect(() => {
-    if (!auth || !db) {
-      setError("Firebase client not found. Please check firebase.client.js");
-      setLoading(false);
-      return;
-    }
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const unsubscribeUser = onSnapshot(
-          userDocRef,
-          (docSnap) => {
-            const userData = docSnap.data();
-            if (
-              docSnap.exists() &&
-              userData?.subscriptionStatus === "active" &&
-              userData?.expiresAt.toDate() > new Date()
-            ) {
-              // User is authenticated and has an active, unexpired subscription
-              // Continue loading other data
-              const lowStockQuery = query(
-                collection(db, "users", currentUser.uid, "items"),
-                where("quantity", "<=", 20)
-              );
-
-              const unsubscribeStock = onSnapshot(
-                lowStockQuery,
-                (snapshot) => {
-                  const items = snapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                  }));
-                  setLowStockItems(items);
-                  setLoading(false);
-                },
-                (err) => {
-                  console.error("Error fetching low stock data:", err);
-                  setError("Failed to load low stock alerts.");
-                  setLoading(false);
-                }
-              );
-
-              const oneMonthAgo = new Date();
-              oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-              const startDateTimestamp = Timestamp.fromDate(oneMonthAgo);
-
-              // Update the sales query to get a sufficient number of recent sales
-              // to determine the last 2 days with records.
-              const salesQuery = query(
-                collection(db, "users", currentUser.uid, "sales"),
-                orderBy("saleDate", "desc"),
-                limit(50) // Increased limit to ensure we get enough data
-              );
-
-              const unsubscribeSales = onSnapshot(
-                salesQuery,
-                (snapshot) => {
-                  let totalRevenue = 0;
-                  let itemsSold = 0;
-                  let totalProfit = 0;
-                  const dailySalesMap = {};
-                  const uniqueDates = new Set();
-                  const allSales = [];
-
-                  snapshot.docs.forEach((doc) => {
-                    const sale = doc.data();
-                    allSales.push(sale);
-                    if (sale.saleDate) {
-                      const dateString = sale.saleDate
-                        .toDate()
-                        .toISOString()
-                        .split("T")[0];
-                      uniqueDates.add(dateString);
-                    }
-                  });
-
-                  // Get the last two unique dates with sales records
-                  const sortedDates = Array.from(uniqueDates).sort(
-                    (a, b) => new Date(b) - new Date(a)
-                  );
-                  const lastTwoDates = sortedDates.slice(0, 2);
-
-                  // Aggregate sales for the last 30 days and for the last 2 recorded days
-                  allSales.forEach((sale) => {
-                    const saleDate = sale.saleDate;
-                    if (saleDate.toDate() >= startDateTimestamp.toDate()) {
-                      totalRevenue += sale.totalRevenue || 0;
-                      itemsSold += sale.quantity || 0;
-                      totalProfit += sale.profit || 0;
-                    }
-
-                    if (saleDate) {
-                      const dateString = saleDate
-                        .toDate()
-                        .toISOString()
-                        .split("T")[0];
-                      if (lastTwoDates.includes(dateString)) {
-                        dailySalesMap[dateString] =
-                          (dailySalesMap[dateString] || 0) +
-                          (sale.totalRevenue || 0);
-                      }
-                    }
-                  });
-
-                  const sortedDailySales = Object.entries(dailySalesMap).sort(
-                    ([dateA], [dateB]) => new Date(dateB) - new Date(dateA)
-                  );
-
-                  setSalesStats({
-                    totalSales: totalRevenue,
-                    itemsSold: itemsSold,
-                    totalProfit: totalProfit,
-                  });
-                  setDailySales(sortedDailySales);
-                },
-                (err) => {
-                  console.error("Error fetching sales data:", err);
-                  setError("Failed to load sales statistics.");
-                }
-              );
-
-              return () => {
-                unsubscribeStock();
-                unsubscribeSales();
-              };
-            } else {
-              // Subscription is inactive or expired, redirect
-              console.log(
-                "Subscription is inactive or expired. Redirecting to root."
-              );
-              window.location.href = "/";
-            }
-          },
-          (error) => {
-            console.error("Error fetching user data:", error);
-            // In case of an error, also redirect to prevent unauthorized access
-            window.location.href = "/";
-          }
-        );
-        return () => unsubscribeUser();
-      } else {
-        console.log("No authenticated user found. Redirecting to auth page.");
+    const checkAuthAndFetchData = async () => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
         window.location.href = "/";
-        setLoading(false);
+        return;
       }
-    });
+      setUser(currentUser);
 
-    return () => unsubscribeAuth();
-  }, []);
+      const { queryId } = await getShopContext(currentUser.id);
+
+      const fetchDashboardData = async () => {
+        // Low stock items
+        const { data: stockData, error: stockError } = await supabase
+          .from("items")
+          .select("*")
+          .eq("user_id", queryId)
+          .lte("quantity", 20);
+        
+        if (!stockError) setLowStockItems(stockData || []);
+
+        // Sales statistics (Last 30 days)
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+
+        const { data: salesData, error: salesError } = await supabase
+          .from("sales")
+          .select("*")
+          .eq("user_id", queryId)
+          .gte("sale_date", oneMonthAgo.toISOString())
+          .order("sale_date", { ascending: false });
+
+        if (!salesError && salesData) {
+          let totalRevenue = 0;
+          let itemsSold = 0;
+          let totalProfit = 0;
+          const dailySalesMap = {};
+          const uniqueDates = new Set();
+
+          salesData.forEach((sale) => {
+            const sale_revenue = sale.total_revenue || sale.totalRevenue || 0;
+            const sale_quantity = sale.quantity || 0;
+            const sale_profit = sale.profit || 0;
+            const sale_date = sale.sale_date || sale.saleDate;
+
+            totalRevenue += sale_revenue;
+            itemsSold += sale_quantity;
+            totalProfit += sale_profit;
+
+            if (sale_date) {
+              const dateString = new Date(sale_date).toISOString().split("T")[0];
+              uniqueDates.add(dateString);
+            }
+          });
+
+          const sortedDates = Array.from(uniqueDates).sort((a, b) => new Date(b) - new Date(a));
+          const lastTwoDates = sortedDates.slice(0, 2);
+
+          salesData.forEach((sale) => {
+            const sale_date = sale.sale_date || sale.saleDate;
+            const sale_revenue = sale.total_revenue || sale.totalRevenue || 0;
+            if (sale_date) {
+              const dateString = new Date(sale_date).toISOString().split("T")[0];
+              if (lastTwoDates.includes(dateString)) {
+                dailySalesMap[dateString] = (dailySalesMap[dateString] || 0) + sale_revenue;
+              }
+            }
+          });
+
+          const sortedDailySales = Object.entries(dailySalesMap).sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA));
+
+          setSalesStats({
+            totalSales: totalRevenue,
+            itemsSold: itemsSold,
+            totalProfit: totalProfit,
+          });
+          setDailySales(sortedDailySales);
+        }
+        setLoading(false);
+      };
+
+      fetchDashboardData();
+
+      // Simple real-time for items only to avoid spam
+      const itemsChannel = supabase.channel('dashboard_items')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `user_id=eq.${queryId}` }, () => fetchDashboardData())
+        .subscribe();
+      const salesChannel = supabase.channel('dashboard_sales')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `user_id=eq.${queryId}` }, () => fetchDashboardData())
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(itemsChannel);
+        supabase.removeChannel(salesChannel);
+      };
+    };
+
+    checkAuthAndFetchData();
+  }, [supabase]);
 
   // Pagination logic
   const totalPages = Math.ceil(lowStockItems.length / itemsPerPage);
@@ -242,8 +180,12 @@ export default function Dashboard() {
   }
 
   // Safely get the user's first name, with a fallback
-  const firstName = user?.displayName?.split(" ")[0] || "User";
-  const lastName = user?.displayName?.split(" ")[1] || "";
+  const fullName =
+    user?.user_metadata?.display_name ||
+    user?.user_metadata?.full_name ||
+    "";
+  const firstName = fullName.split(" ")[0] || user?.email?.split("@")[0] || "User";
+  const lastName = fullName.split(" ").slice(1).join(" ");
 
   return (
     <div className="flex flex-col justify-center items-center p-8 bg-gray-50 md:min-h-[90svh] font-sans">

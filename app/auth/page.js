@@ -2,14 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
-  updateProfile,
-} from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { createClient } from "@/utils/supabase/client";
 import {
   Loader2,
   Mail,
@@ -23,16 +16,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-import {
-  auth,
-  db,
-  firebaseReady as initialFirebaseReady,
-} from "@/firebase/firebase.client";
-
 export default function AuthPage() {
+  const supabase = createClient();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [firebaseReady, setFirebaseReady] = useState(initialFirebaseReady);
   const [error, setError] = useState(null);
   const [isLogin, setIsLogin] = useState(true);
   const [firstName, setFirstName] = useState("");
@@ -44,39 +31,47 @@ export default function AuthPage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
-    if (!auth || !db) {
-      setError("Failed to initialize Firebase services.");
-      setLoading(false);
-      return;
-    }
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error: userRowError } = await supabase.from("users").upsert({
+          id: user.id,
+          updated_at: new Date().toISOString(),
+        });
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userRowError) {
+          throw userRowError;
+        }
 
-        if (userDoc.exists()) {
-          setUser(currentUser);
-          setShowAuthModal(false);
-          console.log("User logged in:", currentUser.uid);
-          if (window.location.pathname !== "/dashboard") {
-            window.location.href = "/dashboard";
-          }
-        } else {
-          // User exists in auth but not in Firestore
-          console.warn("User profile not found in Firestore.");
-          setShowAuthModal(true);
-          setUser(null);
+        setUser(user);
+        setShowAuthModal(false);
+        if (window.location.pathname !== "/dashboard") {
+          window.location.href = "/dashboard";
         }
       } else {
-        // No user logged in
         setShowAuthModal(true);
         setUser(null);
       }
       setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
-  }, []);
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user);
+          setShowAuthModal(false);
+          window.location.href = "/dashboard";
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setShowAuthModal(true);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
 
   const togglePasswordVisibility = () => setPasswordVisible((prev) => !prev);
 
@@ -86,10 +81,12 @@ export default function AuthPage() {
     setError(null);
 
     try {
-      if (!auth || !db) throw new Error("Firebase services not ready.");
-
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
       } else {
         if (password !== confirmPassword) {
           setError("Passwords do not match.");
@@ -97,34 +94,33 @@ export default function AuthPage() {
           return;
         }
 
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
+        const { data: { user: newUser }, error: signUpError } = await supabase.auth.signUp({
           email,
-          password
-        );
-        const newUser = userCredential.user;
-        const fullName = `${firstName.trim()} ${lastName.trim()}`;
-        if (fullName) await updateProfile(newUser, { displayName: fullName });
-
-        await setDoc(doc(db, "users", newUser.uid), {
-          firstName,
-          lastName,
-          email: newUser.email,
-          createdAt: new Date(),
+          password,
+          options: {
+            data: {
+              first_name: firstName,
+              last_name: lastName,
+              display_name: `${firstName} ${lastName}`.trim(),
+            }
+          }
         });
+
+        if (signUpError) throw signUpError;
+
+        if (newUser) {
+          const { error: dbError } = await supabase.from("users").upsert({
+            id: newUser.id,
+            role: "staff",
+            updated_at: new Date().toISOString(),
+          });
+          if (dbError) console.error("Database upsert error:", dbError);
+        }
         console.log("User created successfully.");
       }
     } catch (e) {
       console.error("Authentication error:", e.code, e.message);
-      let message = "An unknown error occurred.";
-      if (e.code === "auth/invalid-email") message = "Invalid email address.";
-      else if (["auth/user-not-found", "auth/wrong-password"].includes(e.code))
-        message = "Incorrect email or password.";
-      else if (e.code === "auth/email-already-in-use")
-        message = "This email is already registered.";
-      else if (e.code === "auth/weak-password")
-        message = "Password must be at least 6 characters.";
-      setError(message);
+      setError(e.message || "An unknown error occurred.");
     } finally {
       setLoading(false);
     }
@@ -133,7 +129,8 @@ export default function AuthPage() {
   const handleSignOut = async () => {
     setLoading(true);
     try {
-      await signOut(auth);
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
       setUser(null);
       setShowAuthModal(true);
     } catch (e) {
@@ -283,7 +280,7 @@ export default function AuthPage() {
       {!showAuthModal && user && (
         <div className="text-center bg-white p-8 rounded-2xl shadow-md">
           <h2 className="text-xl font-bold text-gray-800 mb-2">
-            Welcome, {user.displayName || "User"}!
+            Welcome, {user.user_metadata?.display_name || user.user_metadata?.full_name || "User"}!
           </h2>
           <p className="text-gray-600">{user.email}</p>
           <button

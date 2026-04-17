@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { addDoc, collection, doc, updateDoc, getDoc } from "firebase/firestore";
+// Firebase imports removed
 import { Package, X } from "lucide-react";
-import { query, onSnapshot } from "firebase/firestore";
+// Firebase query imports removed
 import PageLoader from "@/app/components/PageLoader";
 
-const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
+const RecordSaleModal = ({ isOpen, onClose, userId, supabase, initialData, onSaleSaved }) => {
   const [formData, setFormData] = useState({
     itemId: "",
     itemName: "",
@@ -23,27 +23,24 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
   useEffect(() => {
     if (!userId || !isOpen) return;
 
-    setIsFetchingStock(true); // 2. Use new state
-    const q = query(collection(db, `users/${userId}/items`));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const items = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setStockItems(items);
-        setIsFetchingStock(false); // 2. Use new state
-      },
-      (error) => {
+    const fetchStock = async () => {
+      setIsFetchingStock(true);
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .eq("user_id", userId);
+      
+      if (error) {
         console.error("Error fetching stock items: ", error);
         setMessage("Failed to fetch stock items. Please try again.");
-        setIsFetchingStock(false); // 2. Use new state
+      } else {
+        setStockItems(data || []);
       }
-    );
+      setIsFetchingStock(false);
+    };
 
-    return () => unsubscribe();
-  }, [userId, db, isOpen]);
+    fetchStock();
+  }, [userId, supabase, isOpen]);
 
   // Handle clicking outside of the dropdown
   useEffect(() => {
@@ -130,30 +127,32 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
     }
 
     const quantity = Number(formData.quantity);
-    const totalRevenue = selectedItem.sellingPrice * quantity;
-    const totalCost = selectedItem.buyingPrice * quantity;
-    const profit = totalRevenue - totalCost;
+    const itemPrice = Number(selectedItem.price ?? 0);
+    const itemCost = Number(selectedItem.cost ?? 0);
+    const total_revenue = itemPrice * quantity;
+    const total_cost = itemCost * quantity;
+    const profit = total_revenue - total_cost;
 
     try {
       // --- Inventory Update Logic Start ---
-      const itemRef = doc(db, `users/${userId}/items`, selectedItem.id);
+      const { data: currentItemData, error: fetchError } = await supabase
+        .from("items")
+        .select("*")
+        .eq("id", selectedItem.id)
+        .eq("user_id", userId)
+        .single();
 
-      const itemSnap = await getDoc(itemRef);
-      const currentItemData = itemSnap.data();
+      if (fetchError || !currentItemData) throw new Error("Item not found");
 
       let stockAdjustment = 0;
-
       if (initialData && initialData.id) {
-        // EDITING an existing sale
         const oldQuantity = Number(initialData.quantity) || 0;
         stockAdjustment = oldQuantity - quantity;
       } else {
-        // RECORDING a NEW sale
         stockAdjustment = -quantity;
       }
 
-      const newStockQuantity =
-        (currentItemData.quantity || 0) + stockAdjustment;
+      const newStockQuantity = (currentItemData.quantity || 0) + stockAdjustment;
 
       if (newStockQuantity < 0) {
         setMessage(`Not enough stock. Only ${currentItemData.quantity} left.`);
@@ -161,35 +160,43 @@ const RecordSaleModal = ({ isOpen, onClose, userId, db, initialData }) => {
         return;
       }
 
-      // Update the item's stock quantity
-      await updateDoc(itemRef, {
-        quantity: newStockQuantity,
-      });
+      const { error: updateError } = await supabase
+        .from("items")
+        .update({ quantity: newStockQuantity })
+        .eq("id", selectedItem.id)
+        .eq("user_id", userId);
 
+      if (updateError) throw updateError;
       // --- Inventory Update Logic End ---
 
-      // --- Sales Record Save Logic ---
       const salesData = {
-        itemId: selectedItem.id,
-        itemName: selectedItem.name,
-        itemPrice: selectedItem.sellingPrice,
-        unitCost: selectedItem.buyingPrice,
-        totalRevenue: totalRevenue,
-        totalCost: totalCost,
+        item_id: selectedItem.id,
+        item_name: selectedItem.name,
+        total_revenue: total_revenue,
+        total_cost: total_cost,
         profit: profit,
         quantity: quantity,
-        saleDate: new Date(),
-        itemCategory: selectedItem.category,
+        sale_date: new Date(),
+        item_category: selectedItem.category,
+        user_id: userId,
       };
 
       if (initialData && initialData.id) {
-        const saleRef = doc(db, `users/${userId}/sales`, initialData.id);
-        await updateDoc(saleRef, salesData);
+        const { error: saleUpdateError } = await supabase
+          .from("sales")
+          .update(salesData)
+          .eq("id", initialData.id)
+          .eq("user_id", userId);
+        if (saleUpdateError) throw saleUpdateError;
         setMessage("Sale updated successfully!");
       } else {
-        await addDoc(collection(db, `users/${userId}/sales`), salesData);
+        const { error: saleInsertError } = await supabase
+          .from("sales")
+          .insert(salesData);
+        if (saleInsertError) throw saleInsertError;
         setMessage("Sale recorded successfully!");
       }
+      if (onSaleSaved) onSaleSaved();
 
       setTimeout(() => {
         onClose();

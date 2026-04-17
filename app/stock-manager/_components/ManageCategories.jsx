@@ -8,21 +8,12 @@ import {
   Search,
   Loader,
 } from "lucide-react";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  deleteDoc,
-  doc,
-  query,
-  orderBy,
-  onSnapshot,
-} from "firebase/firestore";
+// Firebase imports removed, using supabase client passed from parent
 // NOTE: I assume ConfirmModal is defined in a separate file or the parent file.
 // import ConfirmModal from "./ConfirmModal"; // Keeping existing import
 
 // Create Category Form
-const CreateCategoryForm = ({ onCategoryAdded, showAlert, db, userId }) => {
+const CreateCategoryForm = ({ onCategoryAdded, showAlert, supabase, userId }) => {
   const [categoryName, setCategoryName] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -34,13 +25,19 @@ const CreateCategoryForm = ({ onCategoryAdded, showAlert, db, userId }) => {
     }
     setLoading(true);
     try {
-      await addDoc(collection(db, "users", userId, "categories"), {
-        name: categoryName,
-        createdAt: serverTimestamp(),
-      });
+      const { data: newCategory, error } = await supabase
+        .from("categories")
+        .insert({
+          name: categoryName,
+          user_id: userId,
+          created_at: new Date(),
+        })
+        .select()
+        .single();
+      if (error) throw error;
       showAlert(`Category "${categoryName}" created!`, "Success!");
       setCategoryName("");
-      if (onCategoryAdded) onCategoryAdded();
+      if (onCategoryAdded) onCategoryAdded(newCategory);
     } catch (err) {
       console.error(err);
       showAlert("Error creating category", "Error!");
@@ -115,7 +112,7 @@ const CategoryList = ({ categories, onDelete }) => {
 };
 
 // Manage Categories Component
-const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
+const ManageCategories = ({ onDeleteCategory, onCategoriesChange, showAlert, supabase, userId }) => {
   const [categories, setCategories] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -127,31 +124,54 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
 
   useEffect(() => {
     if (!userId) return;
-    const q = query(
-      collection(db, "users", userId, "categories"),
-      orderBy("name")
-    );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const categoriesData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setCategories(categoriesData);
-      },
-      (error) => {
+    const fetchCategories = async () => {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("user_id", userId)
+        .order("name");
+      
+      if (error) {
         console.error("Error fetching categories: ", error);
         showAlert("Failed to load categories.", "Error!");
+      } else {
+        setCategories(data || []);
       }
-    );
-    return () => unsubscribe();
-  }, [userId, db, showAlert]);
+    };
+
+    fetchCategories();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('categories_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${userId}` },
+        () => fetchCategories()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, supabase, showAlert]);
 
   const filteredCategories = categories.filter((category) =>
     category.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleCategoryAdded = (newCategory) => {
+    if (newCategory) {
+      setCategories((currentCategories) =>
+        [...currentCategories, newCategory].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        )
+      );
+    }
+
+    if (onCategoriesChange) onCategoriesChange();
+  };
 
   const totalPages = Math.ceil(filteredCategories.length / categoriesPerPage);
   const indexOfLast = currentPage * categoriesPerPage;
@@ -160,15 +180,27 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
 
   const handleDeleteClick = (categoryId, categoryName) => {
     setCategoryToDelete(categoryId);
-    setConfirmMessage(`Are you sure you want to delete "${categoryName}"?`);
+    setConfirmMessage(
+      `Are you sure that you want to carry out this operation? You are about to permanently delete the category "${categoryName}". This action is risky, and deleted data cannot be recovered.`
+    );
     setIsConfirmOpen(true);
   };
 
   const handleConfirmDelete = async () => {
     if (!categoryToDelete || !userId) return;
     try {
-      await deleteDoc(doc(db, "users", userId, "categories", categoryToDelete));
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", categoryToDelete)
+        .eq("user_id", userId);
+      
+      if (error) throw error;
       showAlert("Category deleted successfully!", "Success!");
+      setCategories((currentCategories) =>
+        currentCategories.filter((category) => category.id !== categoryToDelete)
+      );
+      if (onCategoriesChange) onCategoriesChange();
     } catch (error) {
       console.error("Error deleting category:", error);
       showAlert("Failed to delete category.", "Error!");
@@ -195,9 +227,9 @@ const ManageCategories = ({ onDeleteCategory, showAlert, db, userId }) => {
       </div>
 
       <CreateCategoryForm
-        onCategoryAdded={() => {}}
+        onCategoryAdded={handleCategoryAdded}
         showAlert={showAlert}
-        db={db}
+        supabase={supabase}
         userId={userId}
       />
 
