@@ -5,15 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
 import {
   Loader2,
-  Mail,
-  Lock,
-  User,
   LogIn,
-  UserPlus,
   LogOut,
   Eye,
   EyeOff,
   AlertTriangle,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 
 export default function AuthPage() {
@@ -21,38 +19,42 @@ export default function AuthPage() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isLogin, setIsLogin] = useState(true);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [roleView, setRoleView] = useState("shop_owner");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error: userRowError } = await supabase.from("users").upsert({
-          id: user.id,
-          updated_at: new Date().toISOString(),
-        });
+      try {
+        const {
+          data: { user: currentUser },
+          error: getUserError,
+        } = await supabase.auth.getUser();
 
-        if (userRowError) {
-          throw userRowError;
+        if (getUserError) {
+          throw getUserError;
         }
 
-        setUser(user);
-        setShowAuthModal(false);
-        if (window.location.pathname !== "/dashboard") {
-          window.location.href = "/dashboard";
+        if (currentUser) {
+          setUser(currentUser);
+          setShowAuthModal(false);
+          if (window.location.pathname !== "/dashboard") {
+            window.location.href = "/dashboard";
+          }
+        } else {
+          setShowAuthModal(true);
+          setUser(null);
         }
-      } else {
+      } catch (authError) {
+        console.error("Failed to check current session:", authError);
+        setError("We could not verify your session. Please sign in again.");
         setShowAuthModal(true);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     checkUser();
@@ -81,42 +83,13 @@ export default function AuthPage() {
     setError(null);
 
     try {
-      if (isLogin) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
-      } else {
-        if (password !== confirmPassword) {
-          setError("Passwords do not match.");
-          setLoading(false);
-          return;
-        }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-        const { data: { user: newUser }, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              first_name: firstName,
-              last_name: lastName,
-              display_name: `${firstName} ${lastName}`.trim(),
-            }
-          }
-        });
-
-        if (signUpError) throw signUpError;
-
-        if (newUser) {
-          const { error: dbError } = await supabase.from("users").upsert({
-            id: newUser.id,
-            role: "staff",
-            updated_at: new Date().toISOString(),
-          });
-          if (dbError) console.error("Database upsert error:", dbError);
-        }
-        console.log("User created successfully.");
+      if (signInError) {
+        throw signInError;
       }
     } catch (e) {
       console.error("Authentication error:", e.code, e.message);
@@ -140,6 +113,26 @@ export default function AuthPage() {
       setLoading(false);
     }
   };
+
+  const roleDetails = {
+    shop_owner: {
+      title: "Shop Owner",
+      subtitle: "Administrator access for Irene's Shop",
+      description:
+        "Use the shop owner's approved account to manage stock, sales, debts, attendants, and reports.",
+      icon: ShieldCheck,
+    },
+    shop_attendant: {
+      title: "Shop Attendant",
+      subtitle: "Operational access assigned by the shop owner",
+      description:
+        "Use the account created for you by the shop owner. Shop attendants are not registered from this page.",
+      icon: Users,
+    },
+  };
+
+  const selectedRole = roleDetails[roleView];
+  const SelectedRoleIcon = selectedRole.icon;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans">
@@ -173,32 +166,58 @@ export default function AuthPage() {
                   Authentication Required
                 </h2>
                 <p className="text-gray-600 text-sm text-center mt-1">
-                  Please sign in or create an account to continue.
+                  Sign in to access Irene&apos;s Shop management system.
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5 mt-4">
-                {!isLogin && (
-                  <>
-                    <input
-                      type="text"
-                      placeholder="First Name"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
-                    <input
-                      type="text"
-                      placeholder="Last Name"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
-                  </>
-                )}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <button
+                  type="button"
+                  onClick={() => setRoleView("shop_owner")}
+                  className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                    roleView === "shop_owner"
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  <ShieldCheck className="mb-2 h-5 w-5" />
+                  <p className="text-sm font-semibold">Shop Owner</p>
+                  <p className="text-xs text-inherit/80">Admin account</p>
+                </button>
 
+                <button
+                  type="button"
+                  onClick={() => setRoleView("shop_attendant")}
+                  className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                    roleView === "shop_attendant"
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  <Users className="mb-2 h-5 w-5" />
+                  <p className="text-sm font-semibold">Shop Attendant</p>
+                  <p className="text-xs text-inherit/80">Staff access</p>
+                </button>
+              </div>
+
+              <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-start gap-3">
+                  <SelectedRoleIcon className="mt-0.5 h-5 w-5 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {selectedRole.title}
+                    </p>
+                    <p className="text-xs font-medium text-blue-700">
+                      {selectedRole.subtitle}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {selectedRole.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-5 mt-4">
                 <input
                   type="email"
                   placeholder="Email Address"
@@ -226,17 +245,6 @@ export default function AuthPage() {
                   </button>
                 </div>
 
-                {!isLogin && (
-                  <input
-                    type={passwordVisible ? "text" : "password"}
-                    placeholder="Confirm Password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                )}
-
                 {error && (
                   <p className="text-red-600 text-sm text-center">{error}</p>
                 )}
@@ -248,27 +256,20 @@ export default function AuthPage() {
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 mx-auto animate-spin" />
-                  ) : isLogin ? (
-                    <>
-                      <LogIn className="inline-block mr-1 h-4 w-4" /> Sign In
-                    </>
                   ) : (
                     <>
-                      <UserPlus className="inline-block mr-1 h-4 w-4" /> Sign Up
+                      <LogIn className="inline-block mr-1 h-4 w-4" /> Sign In
                     </>
                   )}
                 </button>
               </form>
 
-              <div className="text-center mt-4 text-sm">
-                <p className="text-gray-600">
-                  {isLogin ? "Don't have an account?" : "Already registered?"}
-                  <button
-                    onClick={() => setIsLogin(!isLogin)}
-                    className="text-blue-600 font-medium ml-1 hover:underline"
-                  >
-                    {isLogin ? "Sign up" : "Sign in"}
-                  </button>
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">Access control notice</p>
+                <p className="mt-1">
+                  There is only one approved shop owner account. Shop attendant
+                  accounts are created and managed by the shop owner from the
+                  admin page.
                 </p>
               </div>
             </motion.div>

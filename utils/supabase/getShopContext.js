@@ -24,7 +24,7 @@ export async function getShopContext(userId) {
     return { queryId: userId, role: 'shop_owner' }; // safe fallback
   }
 
-  if (dbUser?.role === 'shop_attendant' && dbUser.owner_id) {
+  if (dbUser?.owner_id) {
     return { queryId: dbUser.owner_id, role: dbUser.role };
   }
 

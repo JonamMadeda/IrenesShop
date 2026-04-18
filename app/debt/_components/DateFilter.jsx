@@ -1,64 +1,55 @@
-// _components/DateFilter.jsx
+"use client";
 
-import React, { useState } from "react";
+import React from "react";
+import { Calendar, ChevronDown } from "lucide-react";
 
-// Helper function to format the date as 'MM/DD/YYYY' for display
-const formatDate = (dateString) => {
-  const date = new Date(dateString);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const year = date.getFullYear();
-  return `${month}/${day}/${year}`;
-};
-
+/**
+ * Modernized DateFilter component that matches the professional workspace aesthetic.
+ */
 const DateFilter = ({
   selectedDate,
   setSelectedDate,
   activeRange,
   setActiveRange,
 }) => {
-  // Use 'Daily', 'Weekly', 'Monthly', 'Yearly' as range options
   const ranges = ["Daily", "Weekly", "Monthly", "Yearly"];
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-4 mb-8">
-      <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
-        {/* Date Selector */}
-        <div className="flex items-center space-x-3">
-          <label
-            htmlFor="date-select"
-            className=" text-sm md:text-lg text-gray-700 font-medium whitespace-nowrap"
-          >
-            Select a Date
-          </label>
-          <div className="relative">
-            <input
-              id="date-select"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none pr-2 cursor-pointer"
-            />
-         
-          </div>
+    <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm mb-8 flex flex-col md:flex-row items-center justify-between gap-6">
+      {/* Date Input Section */}
+      <div className="flex items-center gap-4 w-full md:w-auto">
+        <div className="flex items-center justify-center p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+          <Calendar size={18} />
         </div>
+        <div className="relative flex-1 md:flex-none">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-full md:w-48 appearance-none bg-slate-50 border border-slate-200 text-slate-900 py-2.5 px-4 rounded-xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all cursor-pointer"
+          />
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+        </div>
+        <span className="hidden lg:block text-xs font-bold uppercase tracking-widest text-slate-400">
+           Filter Baseline
+        </span>
+      </div>
 
-        {/* Range Selector Buttons */}
-        <div className="flex space-x-2 p-2 bg-gray-100 rounded-xl">
-          {ranges.map((range) => (
-            <button
-              key={range}
-              onClick={() => setActiveRange(range)}
-              className={`px-1 sm:px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${
-                activeRange === range
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "bg-transparent text-gray-700 hover:bg-white"
-              }`}
-            >
-              {range}
-            </button>
-          ))}
-        </div>
+      {/* Range Selection Section */}
+      <div className="flex items-center gap-1.5 p-1.5 bg-slate-50 border border-slate-200 rounded-2xl w-full md:w-auto overflow-x-auto scrollbar-hide">
+        {ranges.map((range) => (
+          <button
+            key={range}
+            onClick={() => setActiveRange(range)}
+            className={`flex-1 md:flex-none px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+              activeRange === range
+                ? "bg-blue-700 text-white shadow-lg shadow-blue-100"
+                : "text-slate-400 hover:text-slate-600 hover:bg-white"
+            }`}
+          >
+            {range}
+          </button>
+        ))}
       </div>
     </div>
   );

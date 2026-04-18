@@ -11,6 +11,7 @@ import PageLoader from "@/app/components/PageLoader";
 import DebtSummary from "./_components/DebtSummary";
 import DebtHeader from "./_components/DebtHeader";
 import DateFilter from "./_components/DateFilter";
+import { logSystemEvent } from "@/utils/logging/client";
 
 // appId and initialAuthToken logic removed for Supabase migration
 
@@ -230,16 +231,50 @@ const DebtTracker = () => {
           .eq("user_id", userId);
         
         if (error) throw error;
+
+        await logSystemEvent({
+          supabase,
+          shopId: userId,
+          action: "update",
+          entityType: "debt_record",
+          entityId: currentRecord.id,
+          entityName: `${customerFirstName} ${customerLastName}`.trim(),
+          details: {
+            item_name: itemName,
+            item_quantity: Number(itemQuantity),
+            total_amount: totalAmount,
+            return_date: returnDate,
+          },
+        });
+
         showStatus("success", "Debt record updated successfully!");
       } else {
-        const { error } = await supabase
+        const { data: insertedDebt, error } = await supabase
           .from("debts")
           .insert({
             ...debtData,
             user_id: userId,
             created_at: new Date(),
-          });
+          })
+          .select()
+          .single();
         if (error) throw error;
+
+        await logSystemEvent({
+          supabase,
+          shopId: userId,
+          action: "create",
+          entityType: "debt_record",
+          entityId: insertedDebt?.id,
+          entityName: `${customerFirstName} ${customerLastName}`.trim(),
+          details: {
+            item_name: itemName,
+            item_quantity: Number(itemQuantity),
+            total_amount: totalAmount,
+            return_date: returnDate,
+          },
+        });
+
         showStatus("success", "Debt record saved successfully!");
       }
       refreshDebts();
@@ -267,6 +302,19 @@ const DebtTracker = () => {
           .eq("id", id)
           .eq("user_id", userId);
         if (error) throw error;
+
+        await logSystemEvent({
+          supabase,
+          shopId: userId,
+          action: "delete",
+          entityType: "debt_record",
+          entityId: id,
+          entityName: "Debt Record",
+          details: {
+            deleted_debt_id: id,
+          },
+        });
+
         showStatus("success", "Debt record deleted successfully!");
         refreshDebts();
       } catch (error) {
@@ -293,6 +341,19 @@ const DebtTracker = () => {
             .eq("user_id", userId);
           
           if (error) throw error;
+
+          await logSystemEvent({
+            supabase,
+            shopId: userId,
+            action: "mark_unpaid",
+            entityType: "debt_record",
+            entityId: debt.id,
+            entityName: debt.itemName,
+            details: {
+              customer_name: `${debt.customerFirstName} ${debt.customerLastName}`.trim(),
+            },
+          });
+
           showStatus("success", "Debt marked as unpaid.");
           refreshDebts();
         } catch (error) {
@@ -336,6 +397,32 @@ const DebtTracker = () => {
             .eq("id", debt.id)
             .eq("user_id", userId);
           if (debtError) throw debtError;
+
+          await logSystemEvent({
+            supabase,
+            shopId: userId,
+            action: "mark_paid",
+            entityType: "debt_record",
+            entityId: debt.id,
+            entityName: debt.itemName,
+            details: {
+              customer_name: `${debt.customerFirstName} ${debt.customerLastName}`.trim(),
+              total_amount: debt.totalAmount,
+            },
+          });
+
+          await logSystemEvent({
+            supabase,
+            shopId: userId,
+            action: "convert_to_sale",
+            entityType: "sale_record",
+            entityName: debt.itemName,
+            details: {
+              source_debt_id: debt.id,
+              quantity: debt.itemQuantity,
+              total_revenue: debt.totalAmount,
+            },
+          });
 
           showStatus("success", "Debt paid and moved to sales successfully!");
           refreshDebts();
@@ -382,8 +469,8 @@ const DebtTracker = () => {
   if (isPageLoading) return <PageLoader />;
 
   return (
-    <div className="min-h-[90vh] bg-gray-100 p-4 sm:p-8 font-sans antialiased">
-      <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-2xl p-6 sm:p-12 border border-gray-100">
+    <div className="min-h-[90svh] bg-gray-50 flex flex-col items-center p-4 font-sans antialiased">
+      <div className="bg-white p-6 sm:p-12 rounded-xl w-full max-w-7xl shadow-2xl border border-gray-100">
         <DebtHeader openPopup={openPopup} />
 
         <DateFilter

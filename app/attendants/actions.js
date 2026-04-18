@@ -2,25 +2,28 @@
 
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
+import { logServerSystemEvent } from "@/utils/logging/server";
 
 export async function getAttendants() {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
-      return []; // Return empty if not authorized instead of throwing to prevent 500
+      return [];
     }
 
-    // Use a simpler query first to avoid potential column-name issues
     const { data, error } = await supabase
       .from("users")
-      .select("id, role, owner_id, updated_at")
-      .eq("owner_id", user.id);
+      .select("id, role, owner_id, display_name, updated_at")
+      .eq("owner_id", user.id)
+      .order("updated_at", { ascending: false });
 
     if (error) {
       console.error("Error fetching attendants:", error);
-      return []; 
+      return [];
     }
 
     return data || [];
@@ -30,16 +33,19 @@ export async function getAttendants() {
   }
 }
 
-export async function createAttendantUser({ email, password, name }) {
+export async function createAttendantUser({ email, password, name, role }) {
   const adminClient = createAdminClient();
   const supabase = await createClient();
-  const { data: { user: owner } } = await supabase.auth.getUser();
+  const {
+    data: { user: owner },
+  } = await supabase.auth.getUser();
 
   if (!owner) {
     throw new Error("Unauthorized");
   }
 
-  // 1. Create the auth user
+  const normalizedRole = role || "shop_attendant";
+
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
     password,
@@ -47,6 +53,7 @@ export async function createAttendantUser({ email, password, name }) {
     user_metadata: {
       display_name: name,
       full_name: name,
+      role: normalizedRole,
     },
   });
 
@@ -57,10 +64,9 @@ export async function createAttendantUser({ email, password, name }) {
 
   const newUser = authData.user;
 
-  // 2. Link in public users table
   const { error: dbError } = await adminClient.from("users").upsert({
     id: newUser.id,
-    role: "shop_attendant",
+    role: normalizedRole,
     display_name: name,
     owner_id: owner.id,
     updated_at: new Date().toISOString(),
@@ -68,10 +74,23 @@ export async function createAttendantUser({ email, password, name }) {
 
   if (dbError) {
     console.error("Error linking public user:", dbError);
-    // Cleanup auth user if db sync fails
     await adminClient.auth.admin.deleteUser(newUser.id);
     throw dbError;
   }
+
+  await logServerSystemEvent({
+    actorUser: owner,
+    shopId: owner.id,
+    action: "create",
+    entityType: "attendant_account",
+    entityId: newUser.id,
+    entityName: name,
+    actorRole: "shop_owner",
+    details: {
+      email,
+      role: normalizedRole,
+    },
+  });
 
   return { success: true, user: newUser };
 }
@@ -79,16 +98,17 @@ export async function createAttendantUser({ email, password, name }) {
 export async function deleteAttendantUser(userId) {
   const adminClient = createAdminClient();
   const supabase = await createClient();
-  const { data: { user: owner } } = await supabase.auth.getUser();
+  const {
+    data: { user: owner },
+  } = await supabase.auth.getUser();
 
   if (!owner) {
     throw new Error("Unauthorized");
   }
 
-  // Verify ownership before deleting
   const { data: attendant, error: fetchError } = await supabase
     .from("users")
-    .select("owner_id")
+    .select("owner_id, display_name, role")
     .eq("id", userId)
     .single();
 
@@ -96,14 +116,25 @@ export async function deleteAttendantUser(userId) {
     throw new Error("Permission denied or user not found");
   }
 
-  // Delete from Auth (cascades or triggers usually handle public table, 
-  // but we can be explicit if needed)
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
   if (deleteError) {
     console.error("Error deleting attendant:", deleteError);
     throw deleteError;
   }
+
+  await logServerSystemEvent({
+    actorUser: owner,
+    shopId: owner.id,
+    action: "delete",
+    entityType: "attendant_account",
+    entityId: userId,
+    entityName: attendant.display_name || "Attendant",
+    actorRole: "shop_owner",
+    details: {
+      role: attendant.role,
+    },
+  });
 
   return { success: true };
 }

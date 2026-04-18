@@ -1,7 +1,17 @@
 "use client";
 
 import React, { useRef, useEffect } from "react";
-import { XCircle } from "lucide-react";
+import { XCircle, User, Phone, Package, Calendar, Hash } from "lucide-react";
+
+const InputGroup = ({ label, icon: Icon, children }) => (
+  <div className="space-y-1.5">
+    <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">
+      <Icon size={12} />
+      {label}
+    </label>
+    {children}
+  </div>
+);
 
 const DebtForm = ({
   isPopupOpen,
@@ -31,7 +41,6 @@ const DebtForm = ({
 }) => {
   const dropdownRef = useRef(null);
 
-  // Handle clicking outside of the dropdown to close it
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -39,9 +48,7 @@ const DebtForm = ({
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef, setIsDropdownOpen]);
 
   const handleItemSelect = (item) => {
@@ -50,224 +57,186 @@ const DebtForm = ({
     setIsDropdownOpen(false);
   };
 
-  // Safely access itemName for filtering
   const filteredItems = items.filter((item) =>
     item.name.toLowerCase().includes((itemName || "").toLowerCase())
   );
 
-  if (!isPopupOpen) {
-    return null;
-  }
+  if (!isPopupOpen) return null;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 backdrop-filter backdrop-blur-sm bg-white/30">
-      <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-10 w-full max-w-2xl transform max-h-[95vh] overflow-hidden relative flex flex-col">
-        <button
-          onClick={closePopup}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors z-10"
-        >
-          <XCircle size={24} />
-        </button>
-        <h2 className=" text-xl md:text-2xl pt-5 font-bold text-center text-gray-800 mb-6">
-          {currentRecord ? "Edit Debt Record" : "Record New Debt Sale"}
-        </h2>
-        <div className="flex-1 overflow-y-auto pr-4 -mr-4">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <label
-                  htmlFor="customerFirstName"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Customer First Name
-                </label>
-                <input
-                  type="text"
-                  id="customerFirstName"
-                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
-                  value={customerFirstName ?? ""}
-                  onChange={(e) => setCustomerFirstName(e.target.value)}
-                  required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 backdrop-blur-md bg-slate-900/40">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+        
+        {/* Header */}
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              {currentRecord ? "Edit Debt Record" : "New Debt Sale"}
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              {currentRecord ? `Modifying entry for ${customerFirstName}` : "Register a new credit transaction"}
+            </p>
+          </div>
+          <button
+            onClick={closePopup}
+            className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all"
+          >
+            <XCircle size={22} />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <div className="flex-1 overflow-y-auto p-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
+            
+            {/* Customer Section */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup label="First Name" icon={User}>
+                  <input
+                    type="text"
+                    value={customerFirstName ?? ""}
+                    onChange={(e) => setCustomerFirstName(e.target.value)}
+                    required
+                    placeholder="Enter first name"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                  />
+                </InputGroup>
+                <InputGroup label="Last Name" icon={User}>
+                  <input
+                    type="text"
+                    value={customerLastName ?? ""}
+                    onChange={(e) => setCustomerLastName(e.target.value)}
+                    required
+                    placeholder="Enter last name"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                  />
+                </InputGroup>
               </div>
-              <div>
-                <label
-                  htmlFor="customerLastName"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Customer Last Name
-                </label>
+              <InputGroup label="Contact Phone" icon={Phone}>
                 <input
-                  type="text"
-                  id="customerLastName"
-                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
-                  value={customerLastName ?? ""}
-                  onChange={(e) => setCustomerLastName(e.target.value)}
-                  required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  type="tel"
+                  value={phoneNumber ?? ""}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="+254..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
                 />
-              </div>
+              </InputGroup>
             </div>
-            <div>
-              <label
-                htmlFor="phoneNumber"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                id="phoneNumber"
-                // 🛠️ FIX APPLIED: ensures controlled input starts with a string
-                value={phoneNumber ?? ""}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="relative" ref={dropdownRef}>
-              <label
-                htmlFor="itemName"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Item Name
-              </label>
-              <input
-                type="text"
-                id="itemName"
-                // 🛠️ FIX APPLIED: ensures controlled input starts with a string
-                value={itemName ?? ""}
-                onChange={(e) => {
-                  setItemName(e.target.value);
-                  setIsDropdownOpen(true);
-                }}
-                onFocus={() => setIsDropdownOpen(true)}
-                required
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Search for an item..."
-              />
-              {isDropdownOpen && (
-                <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
-                  {filteredItems.length > 0 ? (
-                    filteredItems.map((item) => (
-                      <li
-                        key={item.id}
-                        className="p-3 hover:bg-gray-100 cursor-pointer text-gray-800 transition-colors"
-                        onClick={() => handleItemSelect(item)}
-                      >
-                        {item.name}
+
+            <div className="h-px bg-slate-100" />
+
+            {/* Item Section */}
+            <div className="space-y-4">
+              <div className="relative" ref={dropdownRef}>
+                <InputGroup label="Inventory Item" icon={Package}>
+                  <input
+                    type="text"
+                    value={itemName ?? ""}
+                    onChange={(e) => {
+                      setItemName(e.target.value);
+                      setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    required
+                    placeholder="Search stock..."
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                  />
+                </InputGroup>
+                {isDropdownOpen && (
+                  <ul className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-2 max-h-48 overflow-y-auto p-2 space-y-1">
+                    {filteredItems.length > 0 ? (
+                      filteredItems.map((item) => (
+                        <li
+                          key={item.id}
+                          className="p-2.5 hover:bg-blue-50 rounded-lg cursor-pointer text-sm font-bold text-slate-700 transition-colors flex justify-between items-center"
+                          onClick={() => handleItemSelect(item)}
+                        >
+                          <span>{item.name}</span>
+                          <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                             KSh {item.sellingPrice?.toLocaleString()}
+                          </span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="p-4 text-slate-400 text-xs text-center italic">
+                        No matches in inventory
                       </li>
-                    ))
-                  ) : (
-                    <li className="p-3 text-gray-500 text-sm">
-                      No items match your search.
-                    </li>
-                  )}
-                </ul>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <label
-                  htmlFor="itemQuantity"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Quantity
-                </label>
-                <input
-                  type="number"
-                  id="itemQuantity"
-                  // 🛠️ FIX APPLIED: uses || 0 for number input defaults
-                  value={itemQuantity || 0}
-                  onChange={(e) => setItemQuantity(Number(e.target.value))}
-                  min="1"
-                  required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                    )}
+                  </ul>
+                )}
               </div>
-              <div>
-                <label
-                  htmlFor="itemPrice"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Price per Item (Ksh)
-                </label>
-                <input
-                  type="number"
-                  id="itemPrice"
-                  // 🛠️ FIX APPLIED: uses || 0 for number input defaults
-                  value={itemPrice || 0}
-                  readOnly
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-500"
-                />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup label="Order Quantity" icon={Hash}>
+                  <input
+                    type="number"
+                    value={itemQuantity || ""}
+                    onChange={(e) => setItemQuantity(Number(e.target.value))}
+                    min="1"
+                    required
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                  />
+                </InputGroup>
+                <InputGroup label="Unit Price" icon={Hash}>
+                  <div className="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 flex justify-between items-center">
+                    <span>KSh</span>
+                    <span>{(itemPrice || 0).toLocaleString()}</span>
+                  </div>
+                </InputGroup>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <label
-                  htmlFor="dateTaken"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Date Taken
-                </label>
+
+            <div className="h-px bg-slate-100" />
+
+            {/* Dates Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4">
+              <InputGroup label="Transaction Date" icon={Calendar}>
                 <input
                   type="date"
-                  id="dateTaken"
-                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
                   value={dateTaken ?? ""}
                   onChange={(e) => setDateTaken(e.target.value)}
                   required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
                 />
-              </div>
-              <div>
-                <label
-                  htmlFor="returnDate"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Return Date
-                </label>
+              </InputGroup>
+              <InputGroup label="Commitment Date" icon={Calendar}>
                 <input
                   type="date"
-                  id="returnDate"
-                  // 🛠️ FIX APPLIED: ensures controlled input starts with a string
                   value={returnDate ?? ""}
                   onChange={(e) => setReturnDate(e.target.value)}
                   required
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 bg-amber-50/50 border border-amber-100 rounded-xl text-sm font-bold text-amber-900 focus:ring-4 focus:ring-amber-100 focus:border-amber-400 outline-none transition-all"
                 />
-              </div>
+              </InputGroup>
             </div>
           </form>
         </div>
-        <div className="flex justify-center space-x-4 pt-4 mt-auto">
+
+        {/* Footer Actions */}
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
           <button
             type="submit"
             onClick={handleSubmit}
             disabled={isLoading}
-            className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm text-white transition-all duration-300 transform ${
+            className={`flex-1 px-6 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.15em] text-white transition-all shadow-lg ${
               isLoading
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 active:scale-95"
+                ? "bg-slate-400 cursor-not-allowed"
+                : "bg-blue-700 hover:bg-blue-800 shadow-blue-100 active:scale-95"
             }`}
           >
             {isLoading
-              ? "Saving..."
+              ? "Updating Ledger..."
               : currentRecord
-              ? "Update Record"
-              : "Save Record"}
+              ? "Finalize Changes"
+              : "Register Debt Record"}
           </button>
           <button
             type="button"
             onClick={closePopup}
-            disabled={isLoading}
-            className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm transition-all duration-300 transform border border-gray-300 ${
-              isLoading
-                ? "text-gray-400 cursor-not-allowed"
-                : "text-gray-600 hover:bg-gray-100 active:scale-95"
-            }`}
+            className="px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.15em] text-slate-500 hover:bg-white hover:text-slate-800 border border-transparent hover:border-slate-200 transition-all"
           >
-            Cancel
+            Discard
           </button>
         </div>
       </div>

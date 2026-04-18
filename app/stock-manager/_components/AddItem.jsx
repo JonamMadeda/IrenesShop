@@ -1,15 +1,23 @@
 "use client";
 import React, { useState } from "react";
 import { ShoppingBag, Loader, Search, AlertTriangle } from "lucide-react"; // Added AlertTriangle
-// Firebase imports removed
+import { logSystemEvent } from "@/utils/logging/client";
 
-const AddItem = ({ onClose, showAlert, categories, supabase, userId, onItemAdded }) => {
+const AddItem = ({ onClose, showAlert, categories, suppliers, supabase, userId, onItemAdded }) => {
   const [itemName, setItemName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [category, setCategory] = useState("");
+  const [unit, setUnit] = useState("");
   const [buyingPrice, setBuyingPrice] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
+  const [description, setDescription] = useState("");
+  const [sku, setSku] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [reorderLevel, setReorderLevel] = useState("50");
+  const [supplierId, setSupplierId] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // State for the searchable dropdown functionality
   const [categorySearchTerm, setCategorySearchTerm] = useState("");
@@ -37,24 +45,63 @@ const AddItem = ({ onClose, showAlert, categories, supabase, userId, onItemAdded
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("items").insert({
+      const { data: createdItem, error } = await supabase.from("items").insert({
         name: itemName,
         quantity: Number(quantity),
         category,
+        unit: unit || null,
         cost: Number(buyingPrice),
         price: Number(sellingPrice),
+        description: description || null,
+        sku: sku || null,
+        barcode: barcode || null,
+        reorder_level: Number(reorderLevel),
+        supplier_id: supplierId || null,
+        expiry_date: expiryDate || null,
         user_id: userId,
         created_at: new Date(),
-      });
+      }).select().single();
+      
       if (error) throw error;
+
+      await logSystemEvent({
+        supabase,
+        shopId: userId,
+        action: "create",
+        entityType: "inventory_item",
+        entityId: createdItem?.id,
+        entityName: itemName,
+        details: {
+          quantity: Number(quantity),
+          category,
+          unit: unit || null,
+          cost: Number(buyingPrice),
+          price: Number(sellingPrice),
+          description: description || null,
+          sku: sku || null,
+          barcode: barcode || null,
+          reorder_level: Number(reorderLevel),
+          supplier_id: supplierId || null,
+          expiry_date: expiryDate || null,
+        },
+      });
+
       showAlert(`Item "${itemName}" added!`, "Success!");
       if (onItemAdded) onItemAdded();
+      
       // Reset states
       setItemName("");
       setQuantity("");
       setCategory("");
+      setUnit("");
       setBuyingPrice("");
       setSellingPrice("");
+      setDescription("");
+      setSku("");
+      setBarcode("");
+      setReorderLevel("50");
+      setSupplierId("");
+      setExpiryDate("");
       setCategorySearchTerm("");
       setShowCategoryDropdown(false);
       onClose();
@@ -101,27 +148,42 @@ const AddItem = ({ onClose, showAlert, categories, supabase, userId, onItemAdded
         )}
 
         {/* Input Fields Container */}
-        <div className="overflow-y-auto px-2 py-2 space-y-6 max-h-[70vh]">
-          <input
-            type="text"
-            value={itemName}
-            onChange={(e) => setItemName(e.target.value)}
-            placeholder="Item Name"
-            required
-            disabled={loading || !hasCategories} // Disabled if no categories
-            className="w-full px-4 py-4 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all font-sans disabled:bg-gray-50 disabled:cursor-not-allowed"
-          />
-          <input
-            type="number"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            placeholder="Quantity"
-            required
-            disabled={loading || !hasCategories} // Disabled if no categories
-            className="w-full px-4 py-4 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all font-sans disabled:bg-gray-50 disabled:cursor-not-allowed"
-          />
+        <div className="overflow-y-auto px-2 py-2 space-y-4 max-h-[75vh]">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Basic Info</label>
+            <input
+              type="text"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              placeholder="Item Name (e.g. Sugar 1kg)"
+              required
+              disabled={loading || !hasCategories}
+              className="w-full px-4 py-3 text-lg border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all font-sans"
+            />
+          </div>
 
-          {/* New Searchable Category Field */}
+          <div className="grid grid-cols-2 gap-4">
+            <input
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="Qty in Stock"
+              required
+              min="0"
+              disabled={loading || !hasCategories}
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+            />
+            <input
+              type="text"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder="Unit (pcs, kg)"
+              disabled={loading || !hasCategories}
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+            />
+          </div>
+
+          {/* Searchable Category Field */}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
@@ -171,26 +233,130 @@ const AddItem = ({ onClose, showAlert, categories, supabase, userId, onItemAdded
                 </div>
               )}
           </div>
-          {/* End Searchable Category Field */}
 
           <input
-            type="number"
-            value={buyingPrice}
-            onChange={(e) => setBuyingPrice(e.target.value)}
-            placeholder="Buying Price"
-            required
-            disabled={loading || !hasCategories} // Disabled if no categories
+            type="text"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="Unit (e.g. pcs, kg, box)"
+            disabled={loading || !hasCategories}
             className="w-full px-4 py-4 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all font-sans disabled:bg-gray-50 disabled:cursor-not-allowed"
           />
-          <input
-            type="number"
-            value={sellingPrice}
-            onChange={(e) => setSellingPrice(e.target.value)}
-            placeholder="Selling Price"
-            required
-            disabled={loading || !hasCategories} // Disabled if no categories
-            className="w-full px-4 py-4 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all font-sans disabled:bg-gray-50 disabled:cursor-not-allowed"
-          />
+
+          <div className="grid grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Buying Price</label>
+              <input
+                type="number"
+                value={buyingPrice}
+                onChange={(e) => setBuyingPrice(e.target.value)}
+                placeholder="Buying"
+                required
+                step="0.01"
+                min="0"
+                disabled={loading || !hasCategories}
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Selling Price</label>
+              <input
+                type="number"
+                value={sellingPrice}
+                onChange={(e) => setSellingPrice(e.target.value)}
+                placeholder="Selling"
+                required
+                step="0.01"
+                min="0"
+                disabled={loading || !hasCategories}
+                className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans bg-blue-50/30"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors flex items-center"
+            >
+              {showAdvanced ? "- Hide More Options" : "+ Add More Details (Suppliers, Expiry, etc.)"}
+            </button>
+          </div>
+
+          {showAdvanced && (
+            <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Item Code (SKU)</label>
+                  <input
+                    type="text"
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    placeholder="Optional"
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Barcode</label>
+                  <input
+                    type="text"
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                    placeholder="Scan if available"
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Low Stock Threshold</label>
+                  <input
+                    type="number"
+                    value={reorderLevel}
+                    onChange={(e) => setReorderLevel(e.target.value)}
+                    placeholder="Alert at..."
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Preferred Supplier</label>
+                  <select
+                    value={supplierId}
+                    onChange={(e) => setSupplierId(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans appearance-none bg-white"
+                  >
+                    <option value="">Select supplier</option>
+                    {suppliers && suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Expiration Date</label>
+                <input
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Internal Notes</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Packaging details, shelf location..."
+                  rows={2}
+                  className="w-full resize-none px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-sans"
+                />
+              </div>
+            </div>
+          )}
         </div>
         {/* Form submission button */}
         <div className="mt-auto pt-6">

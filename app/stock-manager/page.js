@@ -1,23 +1,23 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import {
   ShoppingBag,
-  ArrowRight,
-  UserCheck,
   XCircle,
   Trash2,
   CheckCircle,
   AlertCircle,
   Loader,
   List,
+  Contact,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { getShopContext } from "@/utils/supabase/getShopContext";
 import ManageCategories from "./_components/ManageCategories";
+import ManageSuppliers from "./_components/ManageSuppliers";
 import AddItem from "./_components/AddItem";
 import PageLoader from "@/app/components/PageLoader";
 import StocksTable from "./_components/StocksTable";
+import { logSystemEvent } from "@/utils/logging/client";
 
 // ---------- Alert Modal ----------
 const AlertModal = ({ show, title, message, onClose }) => {
@@ -123,9 +123,10 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [categoriesRefreshKey, setCategoriesRefreshKey] = useState(0);
 
-  const refreshCategories = () => {
+  const refreshRegistry = () => {
     setCategoriesRefreshKey((current) => current + 1);
   };
 
@@ -142,6 +143,18 @@ const App = () => {
 
       if (isMounted) {
         setCategories(categoriesData || []);
+      }
+    };
+
+    const fetchSuppliers = async (currentUserId) => {
+      const { data: suppliersData } = await supabase
+        .from("suppliers")
+        .select("*")
+        .eq("user_id", currentUserId)
+        .order("name");
+
+      if (isMounted) {
+        setSuppliers(suppliersData || []);
       }
     };
 
@@ -170,6 +183,7 @@ const App = () => {
       setRole(dbUser?.role || 'staff');
 
       await fetchCategories(currentUser.queryId);
+      await fetchSuppliers(currentUser.queryId);
       if (isMounted) {
         setIsLoading(false);
       }
@@ -212,7 +226,19 @@ const App = () => {
       "Manage Categories",
       <ManageCategories
         onDeleteCategory={handleDeleteCategory}
-        onCategoriesChange={refreshCategories}
+        onCategoriesChange={refreshRegistry}
+        showAlert={showAlert}
+        supabase={supabase}
+        userId={user.queryId || user.id}
+      />
+    );
+  };
+
+  const handleManageSuppliers = () => {
+    openModal(
+      "Suppliers",
+      <ManageSuppliers
+        onSuppliersChange={refreshRegistry}
         showAlert={showAlert}
         supabase={supabase}
         userId={user.queryId || user.id}
@@ -227,9 +253,10 @@ const App = () => {
         onClose={closeModal}
         showAlert={showAlert}
         categories={categories}
+        suppliers={suppliers}
         supabase={supabase}
         userId={user.queryId || user.id}
-        onItemAdded={refreshCategories}
+        onItemAdded={refreshRegistry}
       />
     );
   };
@@ -242,13 +269,44 @@ const App = () => {
           name: data.name,
           category: data.category,
           quantity: Number(data.quantity),
+          unit: data.unit || null,
           cost: Number(data.buyingPrice),
           price: Number(data.sellingPrice),
+          description: data.description || null,
+          sku: data.sku || null,
+          barcode: data.barcode || null,
+          reorder_level: Number(data.reorder_level || 50),
+          supplier_id: data.supplier_id || null,
+          expiry_date: data.expiry_date || null,
         })
         .eq("id", id)
         .eq("user_id", user.queryId || user.id);
       
       if (error) throw error;
+
+      await logSystemEvent({
+        supabase,
+        shopId: user.queryId || user.id,
+        action: "update",
+        entityType: "inventory_item",
+        entityId: id,
+        entityName: data.name,
+        details: {
+          quantity: Number(data.quantity),
+          category: data.category,
+          unit: data.unit || null,
+          cost: Number(data.buyingPrice),
+          price: Number(data.sellingPrice),
+          description: data.description || null,
+          sku: data.sku || null,
+          barcode: data.barcode || null,
+          reorder_level: Number(data.reorder_level || 50),
+          supplier_id: data.supplier_id || null,
+          expiry_date: data.expiry_date || null,
+        },
+        actorRole: role,
+      });
+
       showAlert("Item updated successfully!", "Success!");
     } catch (err) {
       console.error(err);
@@ -293,6 +351,18 @@ const App = () => {
         if (error) {
           showAlert("Error deleting item.", "Error!");
         } else {
+          await logSystemEvent({
+            supabase,
+            shopId: user.queryId || user.id,
+            action: "delete",
+            entityType: "inventory_item",
+            entityId: itemId,
+            entityName: itemName,
+            details: {
+              deleted_item_id: itemId,
+            },
+            actorRole: role,
+          });
           showAlert(`Item "${itemName}" deleted.`, "Success!");
         }
         closeConfirmModal();
@@ -315,6 +385,17 @@ const App = () => {
         if (error) {
           showAlert("Error deleting all items.", "Error!");
         } else {
+          await logSystemEvent({
+            supabase,
+            shopId: user.queryId || user.id,
+            action: "delete",
+            entityType: "inventory_batch",
+            entityName: "All Inventory Items",
+            details: {
+              scope: "all_items_for_shop",
+            },
+            actorRole: role,
+          });
           showAlert("All items deleted.", "Success!");
         }
         setIsDeletingAll(false);
@@ -334,33 +415,49 @@ const App = () => {
   return (
     <div className="min-h-[90vh] bg-gray-50 flex flex-col items-center p-4 font-sans">
       <div className="bg-white p-6 rounded-xl w-full max-w-7xl shadow-2xl">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-blue-700">
-            Inventory Manager
-          </h1>
+        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-600">
+              Stock Workspace
+            </p>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">
+              Inventory Manager
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              Keep stock records accurate, review inventory health, and update item details used by Irene&apos;s Shop.
+            </p>
+          </div>
           <div className="flex items-center space-x-4">
-            <p className="hidden sm:block text-gray-500">
-              Welcome, {userDisplayName}
+            <p className="hidden rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 sm:block">
+              Signed in as {userDisplayName}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <button
-            onClick={handleAddNewItem}
-            className="bg-blue-700 text-white py-3 rounded-xl flex justify-center items-center"
-          >
-            <ShoppingBag className="mr-2" /> Add Item
-          </button>
-          
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {(role === 'admin' || role === 'shop_owner') && (
             <>
+              <button
+                onClick={handleAddNewItem}
+                className="bg-blue-700 text-white py-3 rounded-xl flex justify-center items-center font-semibold"
+              >
+                <ShoppingBag className="mr-2" /> Add Item
+              </button>
+              
               <button
                 onClick={handleManageCategories}
                 className="border-2 border-blue-700 text-blue-700 py-3 rounded-xl flex justify-center items-center"
               >
                 <List className="mr-2" /> Manage Categories
               </button>
+
+              <button
+                onClick={handleManageSuppliers}
+                className="border-2 border-slate-700 text-slate-700 py-3 rounded-xl flex justify-center items-center"
+              >
+                <Contact className="mr-2" /> Suppliers
+              </button>
+              
               <button
                 onClick={handleDeleteAllItems}
                 disabled={isDeletingAll}
@@ -384,6 +481,7 @@ const App = () => {
           onUpdate={handleUpdateItem}
           onDelete={handleDeleteItem}
           categories={categories}
+          suppliers={suppliers}
         />
 
         {/* Modals */}

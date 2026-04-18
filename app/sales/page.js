@@ -23,9 +23,11 @@ import {
 } from "lucide-react";
 import RecordSaleModal from "./_components/RecordSaleModal";
 import ConfirmModal from "./_components/ConfirmModal";
+import SaleDetailsModal from "./_components/SaleDetailsModal";
 import SalesTable from "./_components/SalesTable";
 import SalesSummary from "./_components/SalesSummary";
 import PageLoader from "@/app/components/PageLoader";
+import { logSystemEvent } from "@/utils/logging/client";
 
 // appId and initialAuthToken logic removed for Supabase migration
 
@@ -63,6 +65,7 @@ const SalesPage = () => {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmMessage, setConfirmMessage] = useState("");
+  const [selectedSale, setSelectedSale] = useState(null);
   const [period, setPeriod] = useState("monthly"); // Default period
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -120,6 +123,12 @@ const SalesPage = () => {
           itemCategory: item.item_category || item.itemCategory,
           totalRevenue: item.total_revenue || item.totalRevenue,
           totalCost: item.total_cost || item.totalCost,
+          profit: item.profit,
+          remainingQuantity: item.remaining_quantity ?? item.remainingQuantity,
+          recordedByUserId: item.recorded_by_user_id ?? item.recordedByUserId,
+          recordedByName: item.recorded_by_name ?? item.recordedByName,
+          recordedByEmail: item.recorded_by_email ?? item.recordedByEmail,
+          recordedByRole: item.recorded_by_role ?? item.recordedByRole,
         })));
       }
       setLoading(false);
@@ -206,6 +215,10 @@ const SalesPage = () => {
     setIsModalOpen(true);
   };
 
+  const handleViewDetails = (sale) => {
+    setSelectedSale(sale);
+  };
+
   const handleDeleteClick = (saleId) => {
     if (!userId) return;
     setConfirmMessage(
@@ -224,6 +237,19 @@ const SalesPage = () => {
         .eq("user_id", userId);
       
       if (error) throw error;
+
+      await logSystemEvent({
+        supabase,
+        shopId: userId,
+        action: "delete",
+        entityType: "sale_record",
+        entityId: saleId,
+        entityName: "Sale Record",
+        details: {
+          deleted_sale_id: saleId,
+        },
+      });
+
       setSuccessMessage("Sale record deleted successfully!");
       setTimeout(() => {
         setSuccessMessage(null);
@@ -246,6 +272,10 @@ const SalesPage = () => {
     setConfirmAction(null);
   };
 
+  const handleCloseDetails = () => {
+    setSelectedSale(null);
+  };
+
   if (loading) {
     return <PageLoader />;
   }
@@ -259,24 +289,31 @@ const SalesPage = () => {
   }
 
   return (
-    <div className="min-h-[90svh] w-full flex justify-center bg-gray-100 font-sans p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-7xl bg-white rounded-xl shadow-lg p-4 sm:p-6 lg:p-8">
-        {" "}
-        {/* Applied bg-white and padding here */}
-        <div className="flex flex-col sm:flex-row justify-between items-center sm:items-center mb-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-4 sm:mb-0">
-            Sales Records 📈
-          </h1>
+    <div className="min-h-[90svh] bg-gray-50 flex flex-col items-center p-4 font-sans">
+      <div className="bg-white p-6 rounded-xl w-full max-w-7xl shadow-2xl">
+        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-600">
+              Sales Workspace
+            </p>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">
+              Sales Records
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              Track daily transactions, monitor revenue and profit performance, and manage your shop&apos;s sales history.
+            </p>
+          </div>
           <button
             onClick={() => {
               setEditingSale(null);
               setIsModalOpen(true);
             }}
-            className="px-6 py-3 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+            className="px-6 py-3 bg-blue-700 text-white rounded-xl shadow-md hover:bg-blue-800 transition-colors duration-200 font-semibold"
           >
             Record New Sale
           </button>
         </div>
+
         {/* Period Selector & Date Navigation */}
         <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 mb-8 flex flex-col sm:flex-row items-center sm:items-center justify-between relative z-40">
           <div className="flex items-center space-x-4">
@@ -299,7 +336,7 @@ const SalesPage = () => {
               <button
                 key={p}
                 onClick={() => handlePeriodChange(p)}
-                className={`px-2 py-2 text-sm font-medium rounded-xl transition-colors ${
+                className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${
                   period === p
                     ? "bg-blue-600 text-white shadow-md"
                     : "text-gray-600 bg-gray-50 hover:bg-gray-100"
@@ -310,25 +347,29 @@ const SalesPage = () => {
             ))}
           </div>
         </div>
+
         <SalesSummary
           totalSalesRecords={totalSalesRecords}
           totalRevenue={totalRevenue}
           totalProfit={totalProfit}
           totalItemsSold={totalItemsSold}
         />
+
         <SalesTable
           sales={currentSales}
           loading={loading}
           error={error}
           onEdit={handleEdit}
           onDeleteClick={handleDeleteClick}
+          onViewDetails={handleViewDetails}
         />
+
         {sales.length > itemsPerPage && (
-          <nav className="mt-4 flex justify-center items-center space-x-4">
+          <nav className="mt-6 flex justify-center items-center space-x-4">
             <button
               onClick={goToPreviousPage}
               disabled={currentPage === 1}
-              className="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
             >
               Previous
             </button>
@@ -338,12 +379,13 @@ const SalesPage = () => {
             <button
               onClick={goToNextPage}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
             >
               Next
             </button>
           </nav>
         )}
+
         {isModalOpen && (
           <RecordSaleModal
             isOpen={isModalOpen}
@@ -361,6 +403,10 @@ const SalesPage = () => {
             onCancel={handleCloseConfirmModal}
           />
         )}
+        {selectedSale && (
+          <SaleDetailsModal sale={selectedSale} onClose={handleCloseDetails} />
+        )}
+
         {/* Success Notification */}
         {successMessage && (
           <div className="fixed bottom-4 right-4 z-50">

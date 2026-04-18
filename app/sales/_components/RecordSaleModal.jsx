@@ -5,6 +5,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Package, X } from "lucide-react";
 // Firebase query imports removed
 import PageLoader from "@/app/components/PageLoader";
+import { logSystemEvent } from "@/utils/logging/client";
+import { getShopContext } from "@/utils/supabase/getShopContext";
 
 const RecordSaleModal = ({ isOpen, onClose, userId, supabase, initialData, onSaleSaved }) => {
   const [formData, setFormData] = useState({
@@ -169,6 +171,11 @@ const RecordSaleModal = ({ isOpen, onClose, userId, supabase, initialData, onSal
       if (updateError) throw updateError;
       // --- Inventory Update Logic End ---
 
+      const {
+        data: { user: actorUser },
+      } = await supabase.auth.getUser();
+      const actorContext = actorUser ? await getShopContext(actorUser.id) : null;
+
       const salesData = {
         item_id: selectedItem.id,
         item_name: selectedItem.name,
@@ -179,6 +186,29 @@ const RecordSaleModal = ({ isOpen, onClose, userId, supabase, initialData, onSal
         sale_date: new Date(),
         item_category: selectedItem.category,
         user_id: userId,
+        remaining_quantity: newStockQuantity,
+        recorded_by_user_id:
+          initialData?.recordedByUserId ||
+          initialData?.recorded_by_user_id ||
+          actorUser?.id ||
+          null,
+        recorded_by_name:
+          initialData?.recordedByName ||
+          initialData?.recorded_by_name ||
+          actorUser?.user_metadata?.display_name ||
+          actorUser?.user_metadata?.full_name ||
+          actorUser?.email ||
+          null,
+        recorded_by_email:
+          initialData?.recordedByEmail ||
+          initialData?.recorded_by_email ||
+          actorUser?.email ||
+          null,
+        recorded_by_role:
+          initialData?.recordedByRole ||
+          initialData?.recorded_by_role ||
+          actorContext?.role ||
+          null,
       };
 
       if (initialData && initialData.id) {
@@ -188,12 +218,75 @@ const RecordSaleModal = ({ isOpen, onClose, userId, supabase, initialData, onSal
           .eq("id", initialData.id)
           .eq("user_id", userId);
         if (saleUpdateError) throw saleUpdateError;
+
+        await logSystemEvent({
+          supabase,
+          shopId: userId,
+          action: "update",
+          entityType: "sale_record",
+          entityId: initialData.id,
+          entityName: selectedItem.name,
+          details: {
+            quantity,
+            total_revenue,
+            total_cost,
+            profit,
+            stock_quantity_after: newStockQuantity,
+          },
+        });
+
+        await logSystemEvent({
+          supabase,
+          shopId: userId,
+          action: "stock_adjustment",
+          entityType: "inventory_item",
+          entityId: selectedItem.id,
+          entityName: selectedItem.name,
+          details: {
+            reason: "sale_record_updated",
+            stock_quantity_after: newStockQuantity,
+            quantity_sold: quantity,
+          },
+        });
+
         setMessage("Sale updated successfully!");
       } else {
-        const { error: saleInsertError } = await supabase
+        const { data: insertedSale, error: saleInsertError } = await supabase
           .from("sales")
-          .insert(salesData);
+          .insert(salesData)
+          .select()
+          .single();
         if (saleInsertError) throw saleInsertError;
+
+        await logSystemEvent({
+          supabase,
+          shopId: userId,
+          action: "create",
+          entityType: "sale_record",
+          entityId: insertedSale?.id,
+          entityName: selectedItem.name,
+          details: {
+            quantity,
+            total_revenue,
+            total_cost,
+            profit,
+          },
+        });
+
+        await logSystemEvent({
+          supabase,
+          shopId: userId,
+          action: "stock_adjustment",
+          entityType: "inventory_item",
+          entityId: selectedItem.id,
+          entityName: selectedItem.name,
+          details: {
+            reason: "sale_record_created",
+            stock_quantity_after: newStockQuantity,
+            quantity_sold: quantity,
+          },
+        });
+
         setMessage("Sale recorded successfully!");
       }
       if (onSaleSaved) onSaleSaved();

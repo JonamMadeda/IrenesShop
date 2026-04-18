@@ -1,6 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "./components/Navbar";
+import AppShell from "./components/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "IRENESSHOP",
+  title: "IRENE'S-SHOP",
   description: "Retail and Shop Management Application",
 };
 
@@ -26,10 +26,7 @@ export default function RootLayout({ children }) {
         className={`${geistSans.variable} ${geistMono.variable} bg-white text-blue-900 antialiased`}
       >
         <ShopProvider>
-          <Navbar />
-          <main className="min-h-screen pt-16 transition-all md:pl-64 md:pt-0">
-            <div className="min-h-screen">{children}</div>
-          </main>
+          <AppShell>{children}</AppShell>
         </ShopProvider>
       </body>
     </html>

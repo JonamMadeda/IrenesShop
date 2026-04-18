@@ -37,6 +37,7 @@ export async function updateSession(request) {
 
   if (
     !user &&
+    request.nextUrl.pathname !== '/' &&
     !request.nextUrl.pathname.startsWith('/auth') &&
     !request.nextUrl.pathname.startsWith('/auth/callback')
   ) {
@@ -56,12 +57,12 @@ export async function updateSession(request) {
       .single()
 
     const role = dbUser?.role || 'staff'
-    const restrictedPaths = ['/reports', '/account', '/categories']
+    const restrictedPaths = ['/dashboard', '/reports', '/account', '/categories']
     
     if (role !== 'admin' && role !== 'shop_owner' && restrictedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
-      // Redirect non-admins away from restricted paths
+      // Redirect non-admins away from restricted paths to their operational tool
       const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
+      url.pathname = '/sales'
       return NextResponse.redirect(url)
     }
   }

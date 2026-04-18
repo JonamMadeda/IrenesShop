@@ -8,6 +8,7 @@ import {
   Search,
   Loader,
 } from "lucide-react";
+import { logSystemEvent } from "@/utils/logging/client";
 // Firebase imports removed, using supabase client passed from parent
 // NOTE: I assume ConfirmModal is defined in a separate file or the parent file.
 // import ConfirmModal from "./ConfirmModal"; // Keeping existing import
@@ -35,6 +36,19 @@ const CreateCategoryForm = ({ onCategoryAdded, showAlert, supabase, userId }) =>
         .select()
         .single();
       if (error) throw error;
+
+      await logSystemEvent({
+        supabase,
+        shopId: userId,
+        action: "create",
+        entityType: "category",
+        entityId: newCategory?.id,
+        entityName: categoryName,
+        details: {
+          category_name: categoryName,
+        },
+      });
+
       showAlert(`Category "${categoryName}" created!`, "Success!");
       setCategoryName("");
       if (onCategoryAdded) onCategoryAdded(newCategory);
@@ -196,6 +210,19 @@ const ManageCategories = ({ onDeleteCategory, onCategoriesChange, showAlert, sup
         .eq("user_id", userId);
       
       if (error) throw error;
+
+      await logSystemEvent({
+        supabase,
+        shopId: userId,
+        action: "delete",
+        entityType: "category",
+        entityId: categoryToDelete,
+        entityName: categories.find((category) => category.id === categoryToDelete)?.name || "Category",
+        details: {
+          deleted_category_id: categoryToDelete,
+        },
+      });
+
       showAlert("Category deleted successfully!", "Success!");
       setCategories((currentCategories) =>
         currentCategories.filter((category) => category.id !== categoryToDelete)
@@ -288,11 +315,28 @@ const ManageCategories = ({ onDeleteCategory, onCategoriesChange, showAlert, sup
       {/* Assuming ConfirmModal is either defined here or correctly imported */}
       {/* If ConfirmModal is used, ensure it is available in the scope */}
       {isConfirmOpen && (
-        // Placeholder for ConfirmModal usage
-        // Note: You must define or import ConfirmModal for this to work.
-        // If it's defined in the parent component, this structure is fine.
-        // Assuming ConfirmModal is correctly available.
-        <div /* Assuming ConfirmModal component is here */></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900">Confirm Deletion</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{confirmMessage}</p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                Confirm Deletion
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

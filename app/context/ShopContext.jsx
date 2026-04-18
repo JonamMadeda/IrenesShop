@@ -36,8 +36,8 @@ export const ShopProvider = ({ children }) => {
         .single();
       
       if (isMounted) {
-        if (dbUser?.role === 'shop_attendant' && dbUser.owner_id) {
-          setRole('shop_attendant');
+        if (dbUser?.owner_id) {
+          setRole(dbUser?.role || 'shop_attendant');
           setQueryId(dbUser.owner_id);
         } else {
           setRole(dbUser?.role || 'shop_owner');
