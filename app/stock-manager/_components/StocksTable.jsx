@@ -10,6 +10,8 @@ import {
   PackageCheck,
   Search,
   Wallet,
+  RotateCcw,
+  Download,
 } from "lucide-react";
 
 import { createClient } from "@/utils/supabase/client";
@@ -56,14 +58,16 @@ const MetricCard = ({ icon: Icon, label, value, tone = "blue" }) => {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className={`inline-flex rounded-xl border p-3 ${tones[tone]}`}>
-        <Icon size={18} />
+    <div className="group rounded-[32px] border border-slate-100 bg-white p-6 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1">
+      <div className="flex items-start justify-between">
+        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${tones[tone]}`}>
+          <Icon className="h-5 w-5" />
+        </div>
       </div>
-      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+      <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+      <p className="mt-2 text-3xl font-bold text-slate-900 tracking-tight">{value}</p>
     </div>
   );
 };
@@ -600,11 +604,22 @@ const StocksTable = ({ user, categories, suppliers, role, onUpdate, onDelete }) 
           </select>
         </div>
 
-        {(role === 'admin' || role === 'shop_owner') && (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
-            Projected revenue value: <span className="font-bold text-slate-900">{formatCurrency(inventoryMetrics.projectedRevenue)}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="hidden md:flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition-all"
+            title="Refresh Registry"
+          >
+            <RotateCcw size={18} />
+          </button>
+          <button
+            onClick={() => alert("Exporting inventory data...")}
+            className="flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-bold uppercase tracking-widest text-white hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/10"
+          >
+            <Download size={14} />
+            Export Data
+          </button>
+        </div>
       </div>
 
       {loading ? (

@@ -434,41 +434,28 @@ const App = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {(role === 'admin' || role === 'shop_owner') && (
             <>
               <button
                 onClick={handleAddNewItem}
-                className="bg-blue-700 text-white py-3 rounded-xl flex justify-center items-center font-semibold"
+                className="bg-blue-700 text-white py-4 rounded-2xl flex justify-center items-center font-bold shadow-lg shadow-blue-900/10 hover:bg-blue-800 transition-all hover:scale-[1.02] active:scale-95"
               >
-                <ShoppingBag className="mr-2" /> Add Item
+                <ShoppingBag className="mr-2" size={18} /> Add New Item
               </button>
               
               <button
                 onClick={handleManageCategories}
-                className="border-2 border-blue-700 text-blue-700 py-3 rounded-xl flex justify-center items-center"
+                className="border border-slate-200 bg-white text-slate-700 py-4 rounded-2xl flex justify-center items-center font-semibold hover:bg-slate-50 transition-all"
               >
-                <List className="mr-2" /> Manage Categories
+                <List className="mr-2 text-blue-600" size={18} /> Inventory Categories
               </button>
 
               <button
                 onClick={handleManageSuppliers}
-                className="border-2 border-slate-700 text-slate-700 py-3 rounded-xl flex justify-center items-center"
+                className="border border-slate-200 bg-white text-slate-700 py-4 rounded-2xl flex justify-center items-center font-semibold hover:bg-slate-50 transition-all"
               >
-                <Contact className="mr-2" /> Suppliers
-              </button>
-              
-              <button
-                onClick={handleDeleteAllItems}
-                disabled={isDeletingAll}
-                className="bg-red-600 text-white py-3 rounded-xl flex justify-center items-center"
-              >
-                {isDeletingAll ? (
-                  <Loader className="mr-2 animate-spin" />
-                ) : (
-                  <Trash2 className="mr-2" />
-                )}{" "}
-                Delete All Items
+                <Contact className="mr-2 text-blue-600" size={18} /> Wholesaler Directory
               </button>
             </>
           )}
@@ -505,6 +492,29 @@ const App = () => {
           onConfirm={confirmModalState.onConfirm}
           onCancel={closeConfirmModal}
         />
+        {/* Danger Zone - Safely tucked away at the bottom */}
+        {(role === 'admin' || role === 'shop_owner') && (
+          <div className="mt-12 border-t border-slate-100 pt-10">
+            <div className="rounded-2xl bg-red-50/50 border border-red-100 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-red-900 uppercase tracking-wider text-left">System Maintenance</h4>
+                <p className="text-xs text-red-600 mt-1 font-medium text-left">Clear all inventory records. This action is permanent and restricted to shop owners.</p>
+              </div>
+              <button
+                onClick={handleDeleteAllItems}
+                disabled={isDeletingAll}
+                className="bg-white border border-red-200 text-red-600 px-6 py-3 rounded-xl flex items-center text-xs font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
+              >
+                {isDeletingAll ? (
+                  <Loader className="mr-2 animate-spin" size={14} />
+                ) : (
+                  <Trash2 className="mr-2" size={14} />
+                )}
+                Clear Entire Inventory
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

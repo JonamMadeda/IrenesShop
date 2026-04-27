@@ -117,26 +117,22 @@ export default function HomePage() {
           <div className="relative hidden md:block group">
             <div className="relative rounded-[40px] border border-white/50 bg-white/40 p-8 shadow-2xl shadow-slate-900/10 backdrop-blur-2xl transition-transform hover:scale-[1.01] duration-500">
               <div className="grid gap-6">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="rounded-3xl bg-white/90 p-6 border border-white shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Inventory Status</p>
-                    <div className="mt-4 flex items-end justify-between">
-                      <p className="text-4xl font-bold text-slate-900 tracking-tighter">248</p>
-                      <div className="flex items-center text-xs font-bold text-emerald-600 mb-1">
-                        <ArrowUpRight size={14} /> 12%
-                      </div>
-                    </div>
-                    <p className="mt-2 text-[10px] text-slate-500 font-semibold uppercase">Total Stock</p>
+                <div className="rounded-3xl bg-white/90 p-8 border border-white shadow-sm">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Live Status</p>
                   </div>
-                  <div className="rounded-3xl bg-white/90 p-6 border border-white shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Shop Sales</p>
-                    <div className="mt-4 flex items-end justify-between">
-                      <p className="text-4xl font-bold text-slate-900 tracking-tighter">24.8K</p>
-                      <div className="flex items-center text-xs font-bold text-emerald-600 mb-1">
-                        <ArrowUpRight size={14} /> 8%
+                  <div className="space-y-4">
+                    {[
+                      { label: "Inventory Tracking", status: "Active" },
+                      { label: "Sales Recording", status: "Ready" },
+                      { label: "Debt Management", status: "Online" }
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-center justify-between border-b border-slate-50 pb-2">
+                        <span className="text-xs font-semibold text-slate-600">{item.label}</span>
+                        <span className="text-[10px] font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded-md">{item.status}</span>
                       </div>
-                    </div>
-                    <p className="mt-2 text-[10px] text-slate-500 font-semibold uppercase">Today / KSh</p>
+                    ))}
                   </div>
                 </div>
                 
